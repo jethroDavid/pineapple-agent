@@ -1,0 +1,11 @@
+{
+  "id": "root_manager",
+  "name": "Root Manager",
+  "description": "Entry agent that routes coding work to specialist agents.",
+  "handoffDescription": "Routes coding tasks to the best available specialist.",
+  "instructionsFile": "./prompts/root-manager.md",
+  "modelPreset": "app",
+  "toolsets": ["app"],
+  "handoffs": ["codex"],
+  "entrypoint": true
+}
