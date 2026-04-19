@@ -1,6 +1,7 @@
 import { buildApp } from "./entrypoints/http/server.js";
 import { createAppRuntime } from "./entrypoints/bootstrap/runtime.js";
 import { env } from "./config/env.js";
+import { ensureDatabaseSchemaReady } from "./db/client.js";
 
 async function start() {
   const runtime = createAppRuntime();
@@ -8,8 +9,6 @@ async function start() {
   const execution = runtime?.execution ?? null;
   const adapters = runtime?.adapters ?? [];
   const agentRuntime = runtime?.agentRuntime ?? null;
-
-  daemon?.start();
   const app = buildApp({
     adapters,
     execution,
@@ -20,6 +19,17 @@ async function start() {
     await runtime?.closeAgentRuntime();
     await daemon?.stop();
   });
+
+  if (runtime !== null) {
+    try {
+      await ensureDatabaseSchemaReady();
+    } catch (error) {
+      app.log.error(error, "Database schema is not initialized. Run `pnpm db:migrate`.");
+      process.exit(1);
+    }
+  }
+
+  daemon?.start();
 
   if (runtime !== null) {
     try {
