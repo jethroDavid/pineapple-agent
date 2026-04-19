@@ -6,6 +6,11 @@
   "instructionsFile": "./prompts/root-manager.md",
   "modelPreset": "app",
   "toolsets": ["app"],
+  "hostedTools": [
+    {
+      "type": "web_search"
+    }
+  ],
   "handoffs": ["codex"],
   "entrypoint": true
 }

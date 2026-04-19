@@ -6,6 +6,11 @@
   "instructionsFile": "./prompts/codex.md",
   "modelPreset": "codex",
   "toolsets": ["app"],
+  "hostedTools": [
+    {
+      "type": "web_search"
+    }
+  ],
   "sessionBackend": {
     "kind": "codex_mcp",
     "serverId": "codex_mcp"

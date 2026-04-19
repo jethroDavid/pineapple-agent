@@ -18,6 +18,18 @@ pnpm dev
 
 To enable the daemon-backed trigger endpoint, set both `OPENAI_API_KEY` and `OPENAI_MODEL` in `.env`.
 
+To enable OpenAI web search for an agent, add a hosted tool in that agent manifest:
+
+```json
+{
+  "hostedTools": [
+    {
+      "type": "web_search"
+    }
+  ]
+}
+```
+
 To enable cron reminders (including second-level schedules), set:
 
 ```bash

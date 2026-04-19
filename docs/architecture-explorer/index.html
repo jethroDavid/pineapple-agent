@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pineapple Agent Architecture Explorer</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Pineapple Agent</p>
+          <h1>Architecture Explorer</h1>
+        </div>
+        <nav class="topnav">
+          <a href="#map">System Map</a>
+          <a href="#flows">Execution Flows</a>
+          <a href="#concepts">Deep Dives</a>
+          <a href="#persistence">Persistence</a>
+          <a href="#hotspots">Hotspots</a>
+        </nav>
+      </header>
+
+      <main>
+        <section class="hero">
+          <div class="hero-copy">
+            <p class="eyebrow">Thread-First Agent System</p>
+            <h2>
+              Pineapple is a compact orchestration service that turns inbound events
+              into durable agent turns, with recovery and approval built into the
+              core execution loop.
+            </h2>
+            <p class="hero-text">
+              This explorer is based on the current repository structure. It explains
+              how HTTP entrypoints, adapters, trigger routing, the daemon queue, agent
+              runtime, threads, decisions, and database stores fit together during
+              startup, normal turns, approvals, and recovery.
+            </p>
+          </div>
+          <div class="hero-metrics" id="hero-metrics">
+            <article class="metric-card">
+              <strong>2</strong>
+              <span>Current agents</span>
+              <p>`root_manager` is the entrypoint and `codex` is the current specialist.</p>
+            </article>
+            <article class="metric-card">
+              <strong>3</strong>
+              <span>Default adapters</span>
+              <p>Shortcut, cron, and Telegram are the built-in edge integrations.</p>
+            </article>
+            <article class="metric-card">
+              <strong>5</strong>
+              <span>Durable records</span>
+              <p>Threads, agent threads, specialist sessions, executions, and decisions.</p>
+            </article>
+            <article class="metric-card">
+              <strong>1</strong>
+              <span>Serialized queue</span>
+              <p>All work runs through one ordered daemon lane in the current deployment model.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section-block" id="overview">
+          <div class="section-heading">
+            <p class="eyebrow">At A Glance</p>
+            <h3>What Pineapple Actually Is</h3>
+            <p>
+              Pineapple is not just “an agent app”. It is a small orchestration
+              runtime with clear layers: transport adapters at the edge, a durable
+              thread model in the middle, a serialized execution queue for ordering,
+              and an OpenAI-agent graph for the reasoning work.
+            </p>
+          </div>
+          <div class="overview-grid">
+            <article class="overview-card">
+              <h4>1. External systems do not talk to agents directly</h4>
+              <p>
+                Telegram, Shortcut, or future systems first become normalized
+                `TriggerEvent` objects. That means the execution core never depends
+                on Telegram JSON or Shortcut webhook shape.
+              </p>
+            </article>
+            <article class="overview-card">
+              <h4>2. Thread identity comes before model execution</h4>
+              <p>
+                Pineapple routes every trigger into a durable `Thread` first. The
+                agent does work inside a thread, rather than creating its own ad hoc
+                conversation identity on every request.
+              </p>
+            </article>
+            <article class="overview-card">
+              <h4>3. Every run is a durable execution record</h4>
+              <p>
+                Before the runtime does real work, Pineapple inserts an
+                `AgentExecution` row with checkpointed input. That is why recovery,
+                approval pause/resume, and operational inspection are possible.
+              </p>
+            </article>
+            <article class="overview-card">
+              <h4>4. Ordering is preserved by a single in-process daemon queue</h4>
+              <p>
+                Triggers, approvals, and recovery all go through the same queue.
+                That keeps the v1 deployment simple while still preventing
+                concurrency races inside one app process.
+              </p>
+            </article>
+            <article class="overview-card">
+              <h4>5. Runtime memory is split on purpose</h4>
+              <p>
+                `threads` store business thread identity, `agent_threads` store
+                OpenAI runner session items, and `specialist_sessions` store
+                provider-specific continuity like Codex MCP thread ids.
+              </p>
+            </article>
+            <article class="overview-card">
+              <h4>6. Database constraints enforce architecture rules</h4>
+              <p>
+                The schema prevents two active executions on one thread, duplicate
+                active subject threads, and multiple pending approval decisions for
+                one execution. Those are architecture guarantees, not just app
+                conventions.
+              </p>
+            </article>
+          </div>
+          <div class="overview-strip">
+            <div class="overview-sequence">
+              <span>Adapter</span>
+              <span>TriggerEvent</span>
+              <span>Thread Routing</span>
+              <span>AgentExecution</span>
+              <span>Agent Runtime</span>
+              <span>Decision / Completion</span>
+            </div>
+            <p>
+              That sequence is the core mental model for the entire codebase. If you
+              keep it in mind while reading the sections below, the repo structure
+              becomes much easier to follow.
+            </p>
+          </div>
+        </section>
+
+        <section class="section-block" id="map">
+          <div class="section-heading">
+            <p class="eyebrow">Layered View</p>
+            <h3>System Map</h3>
+            <p>
+              Click any node to inspect its responsibility, data shape, and the exact
+              files that implement it.
+            </p>
+          </div>
+          <div class="map-layout">
+            <div class="architecture-map" id="architecture-map">
+              <section class="map-lane">
+                <div class="lane-header">
+                  <h4>Startup And Composition</h4>
+                  <span>Bootstrap layer</span>
+                </div>
+                <div class="lane-grid">
+                  <article class="map-node static-node">
+                    <span class="node-kicker">Bootstrap</span>
+                    <h5>App Startup</h5>
+                    <p>
+                      `src/index.ts` builds runtime pieces, checks DB readiness,
+                      starts the daemon, initializes the agent runtime, recovers runs,
+                      starts Fastify, then initializes adapters.
+                    </p>
+                  </article>
+                  <article class="map-node static-node">
+                    <span class="node-kicker">Entrypoints</span>
+                    <h5>HTTP Surface</h5>
+                    <p>
+                      Fastify exposes `/health`, `/daemon`, `/agents`,
+                      `/agents/runs`, `/triggers`, and decision resolution routes.
+                    </p>
+                  </article>
+                </div>
+              </section>
+              <section class="map-lane">
+                <div class="lane-header">
+                  <h4>Execution Core</h4>
+                  <span>Routing and orchestration</span>
+                </div>
+                <div class="lane-grid">
+                  <article class="map-node static-node">
+                    <span class="node-kicker">Queue</span>
+                    <h5>Pineapple Daemon</h5>
+                    <p>
+                      A single in-process serialized queue. Triggers, approvals, and
+                      recovery all flow through the same ordered job lane.
+                    </p>
+                  </article>
+                  <article class="map-node static-node">
+                    <span class="node-kicker">Execution</span>
+                    <h5>Execution Service</h5>
+                    <p>
+                      Converts incoming work into durable executions, then delegates
+                      to dispatch, runtime, approval, and recovery modules.
+                    </p>
+                  </article>
+                  <article class="map-node static-node">
+                    <span class="node-kicker">Routing</span>
+                    <h5>Thread Routing</h5>
+                    <p>
+                      Resolves `thread_id`, subject binding, or unbound creation
+                      before agent runtime work begins.
+                    </p>
+                  </article>
+                </div>
+              </section>
+              <section class="map-lane">
+                <div class="lane-header">
+                  <h4>Runtime And Durability</h4>
+                  <span>Where continuity lives</span>
+                </div>
+                <div class="lane-grid">
+                  <article class="map-node static-node">
+                    <span class="node-kicker">Threads</span>
+                    <h5>Business Thread Identity</h5>
+                    <p>
+                      `threads` hold title, subject binding, metadata, and
+                      `lastResponseId`. This is the durable conversation anchor.
+                    </p>
+                  </article>
+                  <article class="map-node static-node">
+                    <span class="node-kicker">Agents</span>
+                    <h5>Agent Runtime</h5>
+                    <p>
+                      Loads `.pineapple/agents`, builds handoffs, attaches tools and
+                      MCP/session backends, then runs turns through the OpenAI runner.
+                    </p>
+                  </article>
+                  <article class="map-node static-node">
+                    <span class="node-kicker">Durability</span>
+                    <h5>Execution + Decisions</h5>
+                    <p>
+                      `agent_executions` checkpoint input and run state.
+                      `agent_execution_decisions` persist approval pauses.
+                    </p>
+                  </article>
+                </div>
+              </section>
+            </div>
+            <aside class="detail-panel" id="layer-detail">
+              <span class="detail-kicker">Bootstrap</span>
+              <h4>App Startup</h4>
+              <p>
+                Startup order is one of the most important architectural details in
+                Pineapple because the app only works if durability, queueing, runtime,
+                and transport registration happen in the correct sequence.
+              </p>
+              <div class="detail-group">
+                <h5>What happens</h5>
+                <ul class="detail-list">
+                  <li>Build runtime dependencies in `createAppRuntime()`.</li>
+                  <li>Build the Fastify server with core and adapter routes.</li>
+                  <li>Verify migrations were applied before serving traffic.</li>
+                  <li>Start the daemon before initialization that needs queued work.</li>
+                  <li>Initialize the agent runtime, then recover active runs.</li>
+                  <li>Start listening, then reconcile adapter webhooks and bot config.</li>
+                </ul>
+              </div>
+              <div class="detail-group">
+                <h5>Why it matters</h5>
+                <ul class="detail-list">
+                  <li>Recovery reuses the same queue semantics as live traffic.</li>
+                  <li>External systems only point at a server that is already live.</li>
+                  <li>The bootstrap layer stays thin and operational rather than business-heavy.</li>
+                </ul>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="section-block" id="flows">
+          <div class="section-heading">
+            <p class="eyebrow">Control Flow</p>
+            <h3>Execution Flows</h3>
+            <p>
+              These are the important runtime stories: startup, manual turns,
+              webhook-triggered turns, approval pauses, and recovery after restart.
+            </p>
+          </div>
+          <div class="primer-grid">
+            <article class="primer-card">
+              <h4>Startup</h4>
+              <p>
+                Boot order is: build runtime, verify schema, start daemon, initialize
+                agents, recover active runs, listen, then initialize adapters.
+              </p>
+            </article>
+            <article class="primer-card">
+              <h4>Manual Turn</h4>
+              <p>
+                A direct HTTP run creates or loads a thread, inserts an
+                `AgentExecution`, marks it running, executes the runtime, then
+                completes or pauses for approval.
+              </p>
+            </article>
+            <article class="primer-card">
+              <h4>Trigger Flow</h4>
+              <p>
+                Adapters verify inbound data, normalize it into `TriggerEvent`,
+                route it to a thread, then enqueue the execution in the daemon.
+              </p>
+            </article>
+            <article class="primer-card">
+              <h4>Approval</h4>
+              <p>
+                Approval-required tools produce runtime interruptions. Pineapple
+                stores a pending decision plus serialized run state and resumes later.
+              </p>
+            </article>
+            <article class="primer-card">
+              <h4>Recovery</h4>
+              <p>
+                On restart, queued and running executions are replayed from durable
+                checkpoint state rather than from process memory.
+              </p>
+            </article>
+          </div>
+          <div class="flow-layout">
+            <div class="scenario-rail" id="scenario-tabs">
+              <article class="scenario-tab static-node">
+                <strong>Startup</strong>
+                <h5>Cold Start To Ready State</h5>
+                <p>Boot sequence, runtime init, recovery, and adapter reconciliation.</p>
+              </article>
+              <article class="scenario-tab static-node">
+                <strong>Manual</strong>
+                <h5>Manual Agent Turn</h5>
+                <p>Direct HTTP request into a thread-backed execution.</p>
+              </article>
+              <article class="scenario-tab static-node">
+                <strong>Webhook</strong>
+                <h5>Inbound Trigger Flow</h5>
+                <p>Adapter event to `TriggerEvent` to thread to runtime execution.</p>
+              </article>
+              <article class="scenario-tab static-node">
+                <strong>Approval</strong>
+                <h5>Approval Pause And Resume</h5>
+                <p>Tool interruption, durable decision, and exact run-state resumption.</p>
+              </article>
+              <article class="scenario-tab static-node">
+                <strong>Recovery</strong>
+                <h5>Recovery After Restart</h5>
+                <p>Replaying queued or running executions from stored checkpoint state.</p>
+              </article>
+            </div>
+            <div class="timeline-card">
+              <div class="timeline-header" id="scenario-header">
+                <p class="eyebrow">Startup</p>
+                <h4>Cold Start To Ready State</h4>
+                <p>
+                  This is the single best flow to study first because it reveals how
+                  Pineapple thinks about lifecycle, durability, and ordering.
+                </p>
+                <div class="legend-row">
+                  <span class="action-chip">Trigger: process start</span>
+                  <span class="action-chip">Result: live server with recovered state</span>
+                </div>
+              </div>
+              <ol class="timeline" id="scenario-steps">
+                <li class="timeline-step is-focused">
+                  <div class="step-index">1</div>
+                  <div>
+                    <h5>Compose stores, adapters, tools, runtime, and queue</h5>
+                    <p>The bootstrap layer creates the durable and runtime building blocks.</p>
+                  </div>
+                </li>
+                <li class="timeline-step">
+                  <div class="step-index">2</div>
+                  <div>
+                    <h5>Build Fastify and register adapter routes</h5>
+                    <p>Core endpoints and transport-specific routes land on one server surface.</p>
+                  </div>
+                </li>
+                <li class="timeline-step">
+                  <div class="step-index">3</div>
+                  <div>
+                    <h5>Verify schema readiness</h5>
+                    <p>The app exits fast if migrations were not applied.</p>
+                  </div>
+                </li>
+                <li class="timeline-step">
+                  <div class="step-index">4</div>
+                  <div>
+                    <h5>Start daemon and initialize agent runtime</h5>
+                    <p>Recovery uses the same serialized queue path as normal work.</p>
+                  </div>
+                </li>
+                <li class="timeline-step">
+                  <div class="step-index">5</div>
+                  <div>
+                    <h5>Recover active runs</h5>
+                    <p>Queued/running work is resumed from durable `AgentExecution` state.</p>
+                  </div>
+                </li>
+                <li class="timeline-step">
+                  <div class="step-index">6</div>
+                  <div>
+                    <h5>Start listening, then initialize adapters</h5>
+                    <p>Webhook and bot reconciliation only happens after the server is live.</p>
+                  </div>
+                </li>
+              </ol>
+            </div>
+            <aside class="detail-panel" id="scenario-detail">
+              <span class="detail-kicker">Startup Step 1</span>
+              <h4>Compose Runtime Pieces</h4>
+              <p>
+                `createAppRuntime()` is where Pineapple assembles the working system:
+                thread store, execution stores, decision store, adapters, tool
+                registry, toolset registry, agent runtime, daemon, and execution
+                service.
+              </p>
+              <div class="detail-group">
+                <h5>Why this matters</h5>
+                <ul class="detail-list">
+                  <li>It makes all dependencies explicit instead of hiding them in a framework container.</li>
+                  <li>It cleanly separates operational wiring from domain logic.</li>
+                  <li>It is also where the app decides whether full agent mode is enabled.</li>
+                </ul>
+              </div>
+              <div class="detail-group">
+                <h5>Files</h5>
+                <ul class="timeline-files">
+                  <li>src/entrypoints/bootstrap/runtime.ts</li>
+                  <li>src/entrypoints/bootstrap/services.ts</li>
+                  <li>src/index.ts</li>
+                </ul>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="section-block" id="concepts">
+          <div class="section-heading">
+            <p class="eyebrow">Domain Model</p>
+            <h3>Deep Dives</h3>
+            <p>
+              Use this section to understand the exact role of each major concept:
+              app runtime, execution, agents, threads, adapters, toolsets, and
+              specialist session continuity.
+            </p>
+          </div>
+          <div class="primer-grid">
+            <article class="primer-card">
+              <h4>App Runtime</h4>
+              <p>
+                Operational shell of the whole service: startup order, lifecycle,
+                daemon, execution service, adapters, and agent runtime wiring.
+              </p>
+            </article>
+            <article class="primer-card">
+              <h4>Agent Execution</h4>
+              <p>
+                Durable run record containing checkpointed input, current status,
+                active agent, and optional serialized run state.
+              </p>
+            </article>
+            <article class="primer-card">
+              <h4>Threads</h4>
+              <p>
+                Durable conversation anchor. External triggers route into a thread
+                before model work begins.
+              </p>
+            </article>
+            <article class="primer-card">
+              <h4>Agent Threads</h4>
+              <p>
+                OpenAI Runner session memory for a Pineapple thread, separate from
+                the business thread record.
+              </p>
+            </article>
+            <article class="primer-card">
+              <h4>Specialist Sessions</h4>
+              <p>
+                Provider-specific continuity state such as a Codex MCP thread id for
+                the specialist agent.
+              </p>
+            </article>
+            <article class="primer-card">
+              <h4>Adapters</h4>
+              <p>
+                Edge layer for Telegram, Shortcut, and future systems. They own
+                verification, normalization, and outbound API tools.
+              </p>
+            </article>
+          </div>
+          <div class="concept-layout">
+            <div class="concept-nav" id="concept-nav">
+              <article class="concept-pill static-node">
+                <strong>App Runtime</strong>
+                <span>Composition root and lifecycle shell.</span>
+              </article>
+              <article class="concept-pill static-node">
+                <strong>Agent Execution</strong>
+                <span>Checkpointed app-like execution record.</span>
+              </article>
+              <article class="concept-pill static-node">
+                <strong>Threads</strong>
+                <span>Thread-first durable conversation identity.</span>
+              </article>
+              <article class="concept-pill static-node">
+                <strong>Agents And Handoffs</strong>
+                <span>Manifest-driven graph with specialist delegation.</span>
+              </article>
+              <article class="concept-pill static-node">
+                <strong>Adapters</strong>
+                <span>Ports-and-adapters boundary for external systems.</span>
+              </article>
+              <article class="concept-pill static-node">
+                <strong>Stores And Database</strong>
+                <span>Small store interfaces backed by Drizzle.</span>
+              </article>
+            </div>
+            <article class="detail-panel concept-panel" id="concept-panel">
+              <p class="eyebrow">Concept</p>
+              <h4 class="concept-title">App Runtime</h4>
+              <p>
+                The app runtime is the assembled operating envelope of Pineapple. It
+                is not where routing or agent decision-making happens; it is where the
+                service decides what subsystems exist, how they are wired together,
+                and in what order they start and stop.
+              </p>
+              <div class="detail-group">
+                <h5>What it owns</h5>
+                <ul class="detail-list">
+                  <li>Dependency composition for adapters, stores, tools, runtime, and queue.</li>
+                  <li>Lifecycle functions for initialize, close, and recovery.</li>
+                  <li>Feature gating when OpenAI configuration is not present.</li>
+                </ul>
+              </div>
+              <div class="detail-group">
+                <h5>Why this is important</h5>
+                <ul class="detail-list">
+                  <li>It keeps `index.ts` very small while preserving explicit startup order.</li>
+                  <li>It makes the service operationally understandable without a DI framework.</li>
+                  <li>It separates app composition from execution logic.</li>
+                </ul>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="section-block" id="persistence">
+          <div class="section-heading">
+            <p class="eyebrow">Durability</p>
+            <h3>Persistence And Invariants</h3>
+            <p>
+              Pineapple stays simple by pushing correctness into a few durable records
+              and a handful of strong constraints.
+            </p>
+          </div>
+          <div class="primer-grid">
+            <article class="primer-card">
+              <h4>threads</h4>
+              <p>
+                Business thread identity, subject binding, metadata, title,
+                description, `lastResponseId`, and close/reopen state.
+              </p>
+            </article>
+            <article class="primer-card">
+              <h4>agent_threads</h4>
+              <p>
+                OpenAI Runner session items and active agent continuity for a thread.
+              </p>
+            </article>
+            <article class="primer-card">
+              <h4>agent_executions</h4>
+              <p>
+                Checkpointed execution state, status, active agent, and optional
+                serialized run state.
+              </p>
+            </article>
+            <article class="primer-card">
+              <h4>agent_execution_decisions</h4>
+              <p>
+                Pending approval requests with tool identity, arguments, and
+                human-resolution state.
+              </p>
+            </article>
+          </div>
+          <div class="persistence-layout">
+            <div class="state-machine" id="state-machine">
+              <article class="state-card">
+                <p class="eyebrow">Execution Status</p>
+                <h4>Execution State Machine</h4>
+                <p class="persistence-copy">
+                  The main statuses are `queued`, `running`, `awaiting_approval`,
+                  `completed`, `failed`, and `canceled`.
+                </p>
+                <div class="state-pills">
+                  <span class="state-pill is-active">queued</span>
+                  <span class="state-pill">running</span>
+                  <span class="state-pill">awaiting_approval</span>
+                  <span class="state-pill">completed</span>
+                  <span class="state-pill">failed</span>
+                  <span class="state-pill">canceled</span>
+                </div>
+                <div class="detail-group">
+                  <h5>Queued</h5>
+                  <p>
+                    The execution record has been inserted and accepted, but the
+                    daemon has not yet started processing it.
+                  </p>
+                  <ul class="state-notes">
+                    <li>This is the first durable state after request acceptance.</li>
+                    <li>Recovery can replay queued work on restart.</li>
+                  </ul>
+                </div>
+              </article>
+            </div>
+            <div class="persistence-grid" id="persistence-grid">
+              <article class="persistence-card">
+                <h4>threads</h4>
+                <p>Primary durable subject of the system.</p>
+                <ul class="state-notes">
+                  <li>Only one active thread may exist per subject pair.</li>
+                  <li>Subject type and subject id must be null together or present together.</li>
+                </ul>
+              </article>
+              <article class="persistence-card">
+                <h4>agent_executions</h4>
+                <p>Checkpointed execution state and run lifecycle.</p>
+                <ul class="state-notes">
+                  <li>Only one active execution per thread.</li>
+                  <li>`trigger_id` is unique when present.</li>
+                </ul>
+              </article>
+              <article class="persistence-card">
+                <h4>agent_execution_decisions</h4>
+                <p>Durable approval pause state.</p>
+                <ul class="state-notes">
+                  <li>Only one pending decision per execution.</li>
+                  <li>Approved/rejected decisions must carry resolution fields.</li>
+                </ul>
+              </article>
+              <article class="persistence-card">
+                <h4>specialist_sessions</h4>
+                <p>Provider-side continuity for specialists.</p>
+                <ul class="state-notes">
+                  <li>Unique per thread and agent.</li>
+                  <li>Stores provider thread id and JSON state.</li>
+                </ul>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="section-block" id="hotspots">
+          <div class="section-heading">
+            <p class="eyebrow">Reading Order</p>
+            <h3>Source Hotspots</h3>
+            <p>
+              If you want to study the code directly, these files give the fastest
+              path through the architecture.
+            </p>
+          </div>
+          <div class="hotspot-list" id="hotspot-list">
+            <article class="hotspot-card">
+              <h4>Read This First</h4>
+              <p>
+                Start with startup and composition so the rest of the code has a
+                clear place in your head.
+              </p>
+              <div class="detail-files">
+                <span class="file-chip">src/index.ts</span>
+                <span class="file-chip">src/entrypoints/bootstrap/runtime.ts</span>
+                <span class="file-chip">src/entrypoints/bootstrap/services.ts</span>
+              </div>
+            </article>
+            <article class="hotspot-card">
+              <h4>Execution Brain</h4>
+              <p>
+                These files are the real center of the runtime control flow.
+              </p>
+              <div class="detail-files">
+                <span class="file-chip">src/execution/pipeline/service.ts</span>
+                <span class="file-chip">src/execution/pipeline/dispatch.ts</span>
+                <span class="file-chip">src/execution/pipeline/runtime.ts</span>
+                <span class="file-chip">src/execution/pipeline/approval.ts</span>
+                <span class="file-chip">src/execution/pipeline/recovery.ts</span>
+              </div>
+            </article>
+            <article class="hotspot-card">
+              <h4>Agent Graph</h4>
+              <p>
+                Read manifests plus runtime setup to understand the current
+                `root_manager -> codex` graph.
+              </p>
+              <div class="detail-files">
+                <span class="file-chip">.pineapple/agents/root-manager.json</span>
+                <span class="file-chip">.pineapple/agents/codex.json</span>
+                <span class="file-chip">src/agents/runtime/agent-runtime-setup.ts</span>
+                <span class="file-chip">src/agents/runtime/agent-runtime-turn.ts</span>
+              </div>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script defer src="./app.js"></script>
+  </body>
+</html>
