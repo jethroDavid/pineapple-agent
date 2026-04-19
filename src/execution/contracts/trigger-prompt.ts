@@ -10,10 +10,11 @@ const triggerInputSchema = z.union([
 
 const triggerPromptSchema = z.object({
   input: triggerInputSchema,
-  instructions: z.string().min(1).optional()
+  instructions: z.string().min(1).optional(),
+  agent_id: z.string().min(1).optional()
 });
 
-type TriggerPrompt = z.infer<typeof triggerPromptSchema>;
+export type TriggerPrompt = z.infer<typeof triggerPromptSchema>;
 
 export function parseTriggerPrompt(payload: unknown): TriggerPrompt {
   return triggerPromptSchema.parse(payload);

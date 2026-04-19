@@ -1,4 +1,5 @@
 import { restoreTriggerEvent, type TriggerEvent } from "../contracts/trigger-event.js";
+import { trace, traceError } from "../../utils/trace.js";
 
 export const daemonState = {
   stopped: "stopped",
@@ -41,19 +42,25 @@ export class PineappleDaemon<Result> {
   // do not silently queue work against an uninitialized runtime.
   start(): void {
     this.started = true;
+    trace("daemon", "started");
   }
 
   // Prevents new work from being accepted, then waits for the already queued work
   // to finish so shutdown is graceful instead of interrupting an in-flight job.
   async stop(): Promise<void> {
     this.started = false;
+    trace("daemon", "stopping");
     await this.whenIdle();
+    trace("daemon", "stopped");
   }
 
   // Request/response entrypoint for trigger handling. The caller awaits the result,
   // but the work still runs through the same serialized daemon queue as every
   // other job.
   async submitTrigger(triggerEvent: TriggerEvent): Promise<Result> {
+    trace("daemon", "submit trigger", {
+      triggerId: triggerEvent.trigger_id
+    });
     return await this.submitJob(this.createTriggerJob(triggerEvent));
   }
 
@@ -66,6 +73,9 @@ export class PineappleDaemon<Result> {
     onSuccess?: (result: Result) => void
   ): void {
     this.assertStarted();
+    trace("daemon", "enqueue trigger", {
+      triggerId: triggerEvent.trigger_id
+    });
     this.queueJob(this.createTriggerJob(triggerEvent), {
       onError,
       onSuccess
@@ -76,6 +86,7 @@ export class PineappleDaemon<Result> {
   // in order with trigger processing, such as recovery or approval resolution.
   async submitJob<T>(run: () => Promise<T>): Promise<T> {
     this.assertStarted();
+    trace("daemon", "submit job");
 
     return await new Promise<T>((resolve, reject) => {
       this.queueJob(run, {
@@ -114,6 +125,9 @@ export class PineappleDaemon<Result> {
       return;
     }
 
+    trace("daemon", "drain loop started", {
+      queueDepth: this.queue.length
+    });
     this.drainPromise = this.drainQueue().finally(() => {
       this.drainPromise = null;
 
@@ -123,6 +137,7 @@ export class PineappleDaemon<Result> {
       }
 
       if (!this.processing && this.queue.length === 0) {
+        trace("daemon", "drain loop finished");
         this.flushIdleWaiters();
       }
     });
@@ -131,6 +146,9 @@ export class PineappleDaemon<Result> {
   // Processes queued jobs one at a time to preserve daemon ordering guarantees.
   private async drainQueue(): Promise<void> {
     this.processing = true;
+    trace("daemon", "processing queue", {
+      queueDepth: this.queue.length
+    });
 
     while (this.queue.length > 0) {
       const entry = this.queue.shift();
@@ -143,6 +161,7 @@ export class PineappleDaemon<Result> {
     }
 
     this.processing = false;
+    trace("daemon", "queue idle");
   }
 
   // Releases all pending whenIdle() callers once the daemon is fully drained.
@@ -184,17 +203,35 @@ export class PineappleDaemon<Result> {
   // Wraps a job so the daemon can keep uniform success/failure counters and
   // notify the appropriate completion handlers without breaking the drain loop.
   private queueJob<T>(run: () => Promise<T>, handlers: QueueJobHandlers<T>): void {
+    const queuedAt = Date.now();
     this.queue.push({
       run: async () => {
+        trace("daemon", "job started", {
+          queueDepth: this.queue.length
+        });
         try {
           const result = await run();
           this.processedCount += 1;
+          trace("daemon", "job succeeded", {
+            durationMs: Date.now() - queuedAt,
+            processedCount: this.processedCount,
+            failedCount: this.failedCount
+          });
           handlers.onSuccess?.(result);
         } catch (error) {
           this.failedCount += 1;
+          traceError("daemon", "job failed", error, {
+            durationMs: Date.now() - queuedAt,
+            processedCount: this.processedCount,
+            failedCount: this.failedCount
+          });
           handlers.onError?.(error);
         }
       }
+    });
+
+    trace("daemon", "job queued", {
+      queueDepth: this.queue.length
     });
 
     this.ensureDrainLoop();

@@ -15,6 +15,8 @@ import type { SessionBackend } from "../session-backends/session-backend.js";
 import type { SessionBackendRegistry } from "../session-backends/session-backend-registry.js";
 import type { AgentRuntimeOptions, AgentSummary } from "../agent-runtime.js";
 import { toAgentFunctionTool } from "./agent-runtime-tool.js";
+import { toHostedTools } from "./agent-runtime-hosted-tool.js";
+import { trace } from "../../utils/trace.js";
 
 export type MCPConnectionManager = Awaited<ReturnType<typeof connectMcpServers>>;
 
@@ -34,8 +36,17 @@ export async function initializeAgentGraph(input: {
 }> {
   const manifests = await loadAgentManifests(resolve(input.options.definitionsDir));
   const entrypointAgentId = manifests.find((manifest) => manifest.entrypoint)?.id ?? null;
+  trace("runtime", "loaded agent manifests", {
+    count: manifests.length,
+    entrypointAgentId
+  });
 
   for (const manifest of manifests) {
+    trace("runtime", "initialize manifest", {
+      agentId: manifest.id,
+      toolsets: manifest.toolsets,
+      handoffs: manifest.handoffs
+    });
     const ownedServerIds = new Set(input.sessionBackendRegistry.getOwnedServerIds(manifest));
     const genericServers = manifest.mcpServers
       .filter((server) => !ownedServerIds.has(server.id))
@@ -67,6 +78,9 @@ export async function initializeAgentGraph(input: {
   const allGenericServers = Array.from(input.mcpServersByAgentId.values()).flat();
   const connectionManager =
     allGenericServers.length > 0 ? await connectMcpServers(allGenericServers) : null;
+  trace("runtime", "mcp servers connected", {
+    serverCount: allGenericServers.length
+  });
 
   const manifestMap = new Map(manifests.map((manifest) => [manifest.id, manifest]));
   const buildAgent = (agentId: string, stack = new Set<string>()): Agent<AgentRuntimeContext> => {
@@ -99,7 +113,15 @@ export async function initializeAgentGraph(input: {
       input.options.toolsetRegistry
         .resolve(manifest.toolsets)
         .map((toolDefinition) => toAgentFunctionTool(toolDefinition));
+    const hostedTools = toHostedTools(manifest.hostedTools);
     input.localToolsByAgentId.set(agentId, localTools);
+    trace("runtime", "build agent", {
+      agentId,
+      model: resolvedModel,
+      toolCount: localTools.length + hostedTools.length,
+      handoffCount: handoffs.length,
+      mcpServerCount: (input.mcpServersByAgentId.get(agentId) ?? []).length
+    });
     const agent = new Agent<AgentRuntimeContext>({
       name: manifest.name,
       instructions: (runContext) => {
@@ -114,7 +136,7 @@ export async function initializeAgentGraph(input: {
       handoffDescription: manifest.handoffDescription,
       model: resolvedModel,
       handoffs,
-      tools: [...localTools, ...(sessionBackend?.createTools() ?? [])],
+      tools: [...localTools, ...(sessionBackend?.createTools() ?? []), ...hostedTools],
       mcpServers: input.mcpServersByAgentId.get(agentId) ?? []
     });
 
@@ -128,6 +150,10 @@ export async function initializeAgentGraph(input: {
   for (const manifest of manifests) {
     buildAgent(manifest.id);
   }
+  trace("runtime", "agent graph ready", {
+    agentCount: manifests.length,
+    entrypointAgentId
+  });
 
   return {
     manifests,

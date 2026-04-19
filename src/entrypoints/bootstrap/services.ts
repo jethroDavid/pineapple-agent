@@ -17,6 +17,8 @@ import { DrizzleThreadStore } from "../../db/stores/thread-store.js";
 import type { AgentExecutionDecisionStore } from "../../execution/store/agent-execution-decision-store.js";
 import type { AgentExecutionStore } from "../../execution/store/agent-execution-store.js";
 import { createAppToolRegistry } from "../../tools/create-app-tool-registry.js";
+import { trace } from "../../utils/trace.js";
+import type { TriggerPromptEnricher } from "../../execution/pipeline/trigger-prompt-enrichment.js";
 
 interface AppServices {
   adapters: AppAdapter[];
@@ -27,10 +29,12 @@ interface AppServices {
   agentThreadStore: AgentThreadStore;
   specialistSessionStore: SpecialistSessionStore;
   agentToolsetRegistry: AgentToolsetRegistry;
+  triggerPromptEnrichers: TriggerPromptEnricher[];
 }
 
 export function createAppServices(): AppServices | null {
   if (!env.OPENAI_API_KEY || !env.OPENAI_MODEL) {
+    trace("startup", "services disabled: missing OPENAI_API_KEY or OPENAI_MODEL");
     return null;
   }
 
@@ -42,9 +46,17 @@ export function createAppServices(): AppServices | null {
   const adapters = createAppAdapters({
     threadStore
   });
+  const triggerPromptEnrichers = adapters.flatMap(
+    (adapter) => adapter.getTriggerPromptEnrichers?.() ?? []
+  );
   const toolRegistry = createAppToolRegistry(adapters);
   const agentToolsetRegistry = createAgentToolsetRegistry({
     app: toolRegistry.list()
+  });
+  trace("startup", "services ready", {
+    adapterCount: adapters.length,
+    adapters: adapters.map((adapter) => adapter.name),
+    toolCount: toolRegistry.list().length
   });
 
   return {
@@ -55,6 +67,7 @@ export function createAppServices(): AppServices | null {
     agentExecutionDecisionStore,
     agentThreadStore,
     specialistSessionStore,
-    agentToolsetRegistry
+    agentToolsetRegistry,
+    triggerPromptEnrichers
   };
 }

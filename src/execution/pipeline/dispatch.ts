@@ -8,6 +8,7 @@ import { routeTriggerEvent } from "../routing/route-trigger-event.js";
 import { agentExecutionKind } from "../domain/agent-execution.js";
 import type { ExecutionRequest, ExecutionTurnResult } from "../execution-contracts.js";
 import type { AppExecutionServiceOptions } from "./context.js";
+import { trace } from "../../utils/trace.js";
 import {
   createPendingDecision,
   handleDecisionResolutionRequest,
@@ -15,6 +16,7 @@ import {
 } from "./approval.js";
 import { handleRecoveryRequest } from "./recovery.js";
 import { runFreshExecution } from "./runtime.js";
+import { enrichTriggerPrompt } from "./trigger-prompt-enrichment.js";
 import {
   assertEntrypointAgentId,
   normalizeTurnInput
@@ -47,6 +49,10 @@ export async function submitExecutionRequest(input: {
   request: ExecutionRequest;
   options: AppExecutionServiceOptions;
 }): Promise<ExecutionRequestResult> {
+  trace("execution", "submit request", {
+    kind: input.request.kind
+  });
+
   if (input.options.daemon === null) {
     throw new Error("Execution queue is not configured. Set OPENAI_API_KEY and OPENAI_MODEL first.");
   }
@@ -85,6 +91,10 @@ export async function dispatchExecutionRequest(
   request: ExecutionRequest,
   options: AppExecutionServiceOptions
 ): Promise<ExecutionRequestResult> {
+  trace("execution", "dispatch request", {
+    kind: request.kind
+  });
+
   const agentRuntime = options.agentRuntime;
 
   if (agentRuntime === null || agentRuntime === undefined) {
@@ -108,15 +118,32 @@ async function handleTriggerRequest(
   options: AppExecutionServiceOptions,
   agentRuntime: AppAgentRuntime
 ): Promise<ExecutionTurnResult> {
+  trace("execution", "handle trigger", {
+    triggerId: triggerEvent.trigger_id,
+    source: triggerEvent.source.system,
+    eventType: triggerEvent.source.event_type
+  });
+
   const route = await routeTriggerEvent(triggerEvent, {
     threadStore: options.threadStore
   });
-  const prompt = parseTriggerPrompt(triggerEvent.payload);
+  trace("execution", "trigger routed", {
+    triggerId: triggerEvent.trigger_id,
+    routeKind: route.kind,
+    threadId: route.thread.threadId
+  });
+  const prompt = enrichTriggerPrompt({
+    triggerEvent,
+    thread: route.thread,
+    prompt: parseTriggerPrompt(triggerEvent.payload),
+    enrichers: options.triggerPromptEnrichers
+  });
+
   const normalizedInput = normalizeTurnInput(
     Array.isArray(prompt.input) ? (prompt.input as AgentInputItem[]) : prompt.input,
     prompt.instructions
   );
-  const entrypointAgentId = assertEntrypointAgentId(agentRuntime);
+  const entrypointAgentId = prompt.agent_id ?? assertEntrypointAgentId(agentRuntime);
   const execution = await options.agentExecutionStore.create({
     threadId: route.thread.threadId,
     kind: agentExecutionKind.trigger,
@@ -128,6 +155,12 @@ async function handleTriggerRequest(
       routeKind: route.kind,
       runState: null
     }
+  });
+  trace("execution", "execution created", {
+    executionId: execution.executionId,
+    kind: execution.kind,
+    threadId: execution.threadId,
+    entrypointAgentId: execution.entrypointAgentId
   });
 
   return await runFreshExecution({
@@ -144,6 +177,11 @@ async function handleManualTurnRequest(
   options: AppExecutionServiceOptions,
   agentRuntime: AppAgentRuntime
 ): Promise<ExecutionTurnResult> {
+  trace("execution", "handle manual turn", {
+    threadId: request.threadId ?? null,
+    agentId: request.agentId ?? null
+  });
+
   const thread =
     request.threadId === undefined
       ? await options.threadStore.create({})
@@ -167,6 +205,12 @@ async function handleManualTurnRequest(
       routeKind: null,
       runState: null
     }
+  });
+  trace("execution", "execution created", {
+    executionId: execution.executionId,
+    kind: execution.kind,
+    threadId: execution.threadId,
+    entrypointAgentId: execution.entrypointAgentId
   });
 
   return await runFreshExecution({

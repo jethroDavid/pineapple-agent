@@ -11,6 +11,7 @@ import { AgentThreadNotFoundError } from "../errors.js";
 import { PersistentAgentThreadSession } from "../persistent-agent-thread-session.js";
 import { restoreRunState } from "../restore-run-state.js";
 import type { SessionBackend } from "../session-backends/session-backend.js";
+import { trace, traceError } from "../../utils/trace.js";
 
 export async function executeAgentRuntimeTurn(input: {
   initialized: boolean;
@@ -55,6 +56,12 @@ export async function executeAgentRuntimeTurn(input: {
   if (!thread) {
     throw new AgentThreadNotFoundError(input.optionsForTurn.threadId!);
   }
+  trace("runner", "turn context ready", {
+    threadId: thread.threadId,
+    requestedAgentId,
+    hasSerializedState: input.optionsForTurn.serializedState !== undefined,
+    hasApprovalResolution: input.optionsForTurn.approvalResolution !== undefined
+  });
 
   let agentThread = await input.options.agentThreadStore.get(thread.threadId);
 
@@ -85,17 +92,39 @@ export async function executeAgentRuntimeTurn(input: {
           rootAgent: input.agents.get(agentThread.entrypointAgentId) ?? requestedAgent,
           approvalResolution: input.optionsForTurn.approvalResolution
         });
-  const result = await input.runner.run(
-    startingAgent,
-    runnerInput as string | AgentInputItem[],
-    {
-      session,
-      context: {
+  const result = await (async () => {
+    try {
+      trace("runner", "runner.run start", {
         threadId: thread.threadId,
-        specialistSessions
-      }
+        startingAgentId: input.agentIdsByInstance.get(startingAgent) ?? requestedAgentId,
+        activeAgentId: agentThread.activeAgentId
+      });
+      return await input.runner.run(
+        startingAgent,
+        runnerInput as string | AgentInputItem[],
+        {
+          session,
+          context: {
+            threadId: thread.threadId,
+            specialistSessions
+          }
+        }
+      );
+    } catch (error) {
+      traceError("runner", "runner.run failed", error, {
+        threadId: thread.threadId,
+        requestedAgentId
+      });
+      throw error;
     }
-  );
+  })();
+
+  trace("runner", "runner.run done", {
+    threadId: thread.threadId,
+    lastResponseId: result.lastResponseId ?? null,
+    interruptionCount: result.interruptions.length,
+    newItemCount: result.newItems.length
+  });
   const activeAgentId =
     (result.activeAgent && input.agentIdsByInstance.get(result.activeAgent)) ??
     agentThread.activeAgentId;
@@ -119,6 +148,10 @@ export async function executeAgentRuntimeTurn(input: {
 
     await input.options.specialistSessionStore.upsert({
       ...sessionUpdate,
+      threadId: thread.threadId,
+      agentId: sessionUpdate.agentId
+    });
+    trace("runner", "specialist session updated", {
       threadId: thread.threadId,
       agentId: sessionUpdate.agentId
     });

@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import type { AppAdapter } from "../../adapters/app-adapter.js";
 import type { AppAgentRuntime } from "../../agents/agent-runtime.js";
+import { env } from "../../config/env.js";
 import { mapAppError } from "./error-mapper.js";
 import { triggerEventSchema } from "../../execution/contracts/trigger-event.js";
 import { parseDecisionResolutionRequest } from "../../execution/decision-resolution.js";
@@ -22,8 +23,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const agentRuntime = options.agentRuntime ?? null;
   const execution = options.execution ?? null;
   const queueEnabled = execution?.getQueueStatus() !== null;
+  const loggerLevel = env.LOG_LEVEL ?? (env.NODE_ENV === "development" ? "debug" : "info");
   const app = Fastify({
-    logger: true
+    logger: {
+      level: loggerLevel
+    }
   });
 
   app.addContentTypeParser(

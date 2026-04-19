@@ -10,6 +10,11 @@ import {
   agentExecutionKind,
   agentExecutionStatus
 } from "../../src/execution/domain/agent-execution.js";
+import {
+  createTriggerEvent,
+  triggerActorType,
+  triggerSourceKind
+} from "../../src/execution/contracts/trigger-event.js";
 import { InMemoryThreadStore } from "../support/in-memory-thread-store.js";
 import {
   InMemoryAgentExecutionDecisionStore,
@@ -37,6 +42,7 @@ function createRuntimeResult(
 function createExecutionContext(options?: {
   executeTurn?: AppAgentRuntime["executeTurn"];
   entrypointAgentId?: string;
+  triggerPromptEnrichers?: AppExecutionServiceOptions["triggerPromptEnrichers"];
 }): {
   daemon: PineappleDaemon<unknown>;
   threadStore: InMemoryThreadStore;
@@ -73,12 +79,52 @@ function createExecutionContext(options?: {
       agentRuntime,
       threadStore,
       agentExecutionStore,
-      agentExecutionDecisionStore
+      agentExecutionDecisionStore,
+      triggerPromptEnrichers: options?.triggerPromptEnrichers
     }
   };
 }
 
 describe("app execution modules", () => {
+  it("uses payload agent_id for trigger requests when provided", async () => {
+    const context = createExecutionContext();
+
+    const result = await submitExecutionRequest({
+      request: {
+        kind: "trigger",
+        triggerEvent: createTriggerEvent({
+          trigger_id: "cron:reminder:1",
+          source: {
+            kind: triggerSourceKind.system,
+            system: "pineapple-cron",
+            event_type: "reminder.tick"
+          },
+          actor: {
+            type: triggerActorType.system,
+            id: "pineapple-cron"
+          },
+          routing: {
+            allow_unbound_thread: true
+          },
+          payload: {
+            input: "Reminder",
+            agent_id: "codex"
+          }
+        })
+      },
+      options: context.serviceOptions
+    });
+
+    expect(result.execution.kind).toBe(agentExecutionKind.trigger);
+    expect(context.executeTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: "codex"
+      })
+    );
+
+    await context.daemon.stop();
+  });
+
   it("dispatches manual turns through the request dispatcher", async () => {
     const context = createExecutionContext();
     const thread = await context.threadStore.create({});
@@ -98,6 +144,59 @@ describe("app execution modules", () => {
     expect(context.executeTurn).toHaveBeenCalledWith(
       expect.objectContaining({
         threadId: thread.threadId
+      })
+    );
+
+    await context.daemon.stop();
+  });
+
+  it("applies configured trigger prompt enrichers before runtime execution", async () => {
+    const context = createExecutionContext({
+      triggerPromptEnrichers: [
+        ({ prompt }) => ({
+          ...prompt,
+          instructions: [prompt.instructions, "Injected instruction."]
+            .filter((value): value is string => Boolean(value))
+            .join(" ")
+        })
+      ]
+    });
+    const thread = await context.threadStore.create({});
+
+    await submitExecutionRequest({
+      request: {
+        kind: "trigger",
+        triggerEvent: createTriggerEvent({
+          trigger_id: "trigger:1",
+          source: {
+            kind: triggerSourceKind.system,
+            system: "test",
+            event_type: "tick"
+          },
+          actor: {
+            type: triggerActorType.system,
+            id: "test"
+          },
+          routing: {
+            thread_id: thread.threadId
+          },
+          payload: {
+            input: "Reminder",
+            instructions: "Base instruction."
+          }
+        })
+      },
+      options: context.serviceOptions
+    });
+
+    expect(context.executeTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.arrayContaining([
+          expect.objectContaining({
+            role: "system",
+            content: "Base instruction. Injected instruction."
+          })
+        ])
       })
     );
 

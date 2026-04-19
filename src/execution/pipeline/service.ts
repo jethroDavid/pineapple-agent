@@ -6,6 +6,7 @@ import { agentExecutionStatus } from "../domain/agent-execution.js";
 import type { TriggerEvent } from "../contracts/trigger-event.js";
 import type { PineappleDaemonStatus } from "../queue/pineapple-daemon.js";
 import type { AppExecutionServiceOptions } from "./context.js";
+import { trace } from "../../utils/trace.js";
 import {
   dispatchExecutionRequest,
   submitExecutionRequest
@@ -53,6 +54,9 @@ export function createAppExecutionService(
       );
     },
     async submitTrigger(triggerEvent) {
+      trace("execution", "service submitTrigger", {
+        triggerId: triggerEvent.trigger_id
+      });
       return await submitExecutionRequest({
         request: {
           kind: "trigger",
@@ -66,6 +70,9 @@ export function createAppExecutionService(
         throw new Error("Execution queue is not configured. Set OPENAI_API_KEY and OPENAI_MODEL first.");
       }
 
+      trace("execution", "service enqueueTrigger", {
+        triggerId: triggerEvent.trigger_id
+      });
       options.daemon.submitJob(() =>
         dispatchExecutionRequest(
           {
@@ -81,6 +88,10 @@ export function createAppExecutionService(
       });
     },
     async runTurn(runOptions) {
+      trace("execution", "service runTurn", {
+        threadId: runOptions.threadId ?? null,
+        agentId: runOptions.agentId ?? null
+      });
       return await submitExecutionRequest({
         request: {
           kind: "manual_turn",
@@ -92,6 +103,10 @@ export function createAppExecutionService(
       });
     },
     async resolveDecision(decisionId, resolution) {
+      trace("approval", "service resolveDecision", {
+        decisionId,
+        resolution
+      });
       return await submitExecutionRequest({
         request: {
           kind: "decision_resolution",
@@ -107,6 +122,9 @@ export function createAppExecutionService(
         agentExecutionStatus.running
       ]);
       const results: ExecutionTurnResult[] = [];
+      trace("recovery", "service recoverActiveRuns", {
+        count: recoverable.length
+      });
 
       for (const execution of recoverable) {
         results.push(

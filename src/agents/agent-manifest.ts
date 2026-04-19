@@ -24,6 +24,17 @@ const sessionBackendManifestSchema = z.discriminatedUnion("kind", [
   codexMcpSessionBackendManifestSchema
 ]);
 
+const webSearchHostedToolManifestSchema = z.object({
+  type: z.literal("web_search"),
+  searchContextSize: z.enum(["low", "medium", "high"]).optional(),
+  externalWebAccess: z.boolean().optional(),
+  allowedDomains: z.array(nonEmptyString).max(100).optional()
+});
+
+const hostedToolManifestSchema = z.discriminatedUnion("type", [
+  webSearchHostedToolManifestSchema
+]);
+
 export const agentManifestSchema = z.object({
   id: nonEmptyString,
   name: nonEmptyString,
@@ -34,6 +45,7 @@ export const agentManifestSchema = z.object({
   modelPreset: agentModelPresetSchema.optional(),
   handoffs: z.array(nonEmptyString).default([]),
   toolsets: z.array(nonEmptyString).default([]),
+  hostedTools: z.array(hostedToolManifestSchema).optional(),
   mcpServers: z.array(stdioMcpServerManifestSchema).default([]),
   sessionBackend: sessionBackendManifestSchema.optional(),
   entrypoint: z.boolean().default(false)
@@ -45,6 +57,8 @@ export type SessionBackendManifest = z.infer<typeof sessionBackendManifestSchema
 export type CodexMcpSessionBackendManifest = z.infer<
   typeof codexMcpSessionBackendManifestSchema
 >;
+export type HostedToolManifest = z.infer<typeof hostedToolManifestSchema>;
+export type WebSearchHostedToolManifest = z.infer<typeof webSearchHostedToolManifestSchema>;
 
 export interface LoadedAgentManifest extends AgentManifest {
   manifestPath: string;

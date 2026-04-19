@@ -25,6 +25,7 @@ import {
   createDesiredTelegramWebhookRequest,
   type NormalizedTelegramAdapterOptions
 } from "./telegram-adapter-options.js";
+import { trace, traceError } from "../../utils/trace.js";
 
 const defaultTelegramCommands: TelegramBotCommand[] = [
   {
@@ -72,6 +73,9 @@ export async function initializeTelegramAdapter(
   context: AppAdapterInitContext,
   webhookPath: string
 ): Promise<void> {
+  trace("telegram", "adapter initialize", {
+    inboundMode: options.inboundMode
+  });
   await reconcileTelegramCommands(client, context);
 
   if (options.inboundMode === telegramInboundMode.polling) {
@@ -120,6 +124,9 @@ export function registerTelegramWebhookRoute(
   app: FastifyInstance,
   options: RegisterTelegramWebhookRouteOptions
 ): void {
+  trace("telegram", "register webhook route", {
+    path: options.webhookPath
+  });
   app.post(options.webhookPath, (request, reply) => {
     if (request.headers[telegramWebhookSecretHeader] !== options.webhookSecret) {
       return reply.code(401).send({
@@ -130,6 +137,7 @@ export function registerTelegramWebhookRoute(
     reply.code(200).send({
       ok: true
     });
+    trace("telegram", "webhook delivery accepted");
 
     void processTelegramWebhookDelivery(
       request.body,
@@ -196,6 +204,7 @@ async function processTelegramWebhookDelivery(
   try {
     await processTelegramUpdate(body, options);
   } catch (error) {
+    traceError("telegram", "webhook background processing failed", error);
     options.logger.error(
       {
         ...(error instanceof Error ? { err: error } : { error })
@@ -223,12 +232,14 @@ function startTelegramPolling(
         });
 
         for (const update of updates) {
+          trace("telegram", "polling update received");
           nextOffset = (await processTelegramUpdate(
             update,
             createTelegramUpdateProcessorOptions(handlingOptions, context.logger)
           )) + 1;
         }
       } catch (error) {
+        traceError("telegram", "polling cycle failed", error);
         context.logger.error(
           {
             ...(error instanceof Error ? { err: error } : { error })

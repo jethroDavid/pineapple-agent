@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from "fastify";
 
 import type { ThreadStore } from "../../threads/store/thread-store.js";
 import type { Thread } from "../../threads/domain/thread.js";
+import { applyThreadMetadataPatch } from "../../threads/domain/thread.js";
 import type { AppExecutionService } from "../../execution/pipeline/service.js";
 import type { ExecutionTurnResult } from "../../execution/execution-contracts.js";
 import type {
@@ -15,6 +16,7 @@ import {
   telegramCommandName,
   type TelegramAcceptedWebhookUpdate
 } from "./telegram-webhook.js";
+import { trace, traceError } from "../../utils/trace.js";
 
 const telegramSendMessageToolName = "telegram_send_message";
 const telegramListLimit = 10;
@@ -35,6 +37,11 @@ export async function processTelegramUpdate(
   const result = normalizeTelegramWebhookUpdate(update);
 
   if (result.kind === "ignored") {
+    trace("telegram", "update ignored", {
+      updateId: result.updateId,
+      eventType: result.eventType,
+      reason: result.reason
+    });
     options.logger.info(
       {
         updateId: result.updateId,
@@ -46,6 +53,11 @@ export async function processTelegramUpdate(
     return result.updateId;
   }
 
+  trace("telegram", "update accepted", {
+    updateId: result.updateId,
+    eventType: result.eventType,
+    hasCommand: result.command !== null
+  });
   await processTelegramAcceptedUpdate(result, options);
   return result.updateId;
 }
@@ -64,12 +76,23 @@ async function processTelegramAcceptedUpdate(
   }
 
   const threadId = await resolveTelegramThreadId(result, options);
+  await persistTelegramThreadContext(threadId, result, options);
   const triggerEvent = createTelegramTriggerEvent({
     update: result,
     threadId
   });
+  trace("telegram", "enqueue trigger", {
+    updateId: result.updateId,
+    triggerId: triggerEvent.trigger_id,
+    threadId
+  });
 
   options.execution.enqueueTrigger(triggerEvent, (error) => {
+    traceError("telegram", "trigger failed", error, {
+      updateId: result.updateId,
+      triggerId: triggerEvent.trigger_id,
+      threadId
+    });
     options.logger.error(
       {
         ...(error instanceof Error ? { err: error } : { error }),
@@ -80,6 +103,12 @@ async function processTelegramAcceptedUpdate(
       "Telegram webhook trigger failed."
     );
   }, (runResult) => {
+    trace("telegram", "trigger finished", {
+      updateId: result.updateId,
+      triggerId: triggerEvent.trigger_id,
+      executionId: runResult.execution.executionId,
+      status: runResult.execution.status
+    });
     void sendTelegramRunReplyFallback(runResult, result, options);
   });
 }
@@ -96,6 +125,10 @@ async function sendTelegramCommandReply(
       text: commandReply.text
     });
   } catch (error) {
+    traceError("telegram", "command reply failed", error, {
+      updateId: update.updateId,
+      command: update.command?.name
+    });
     options.logger.error(
       {
         ...(error instanceof Error ? { err: error } : { error }),
@@ -132,6 +165,10 @@ async function sendTelegramRunReplyFallback(
       text
     });
   } catch (error) {
+    traceError("telegram", "fallback reply failed", error, {
+      updateId: update.updateId,
+      triggerId: `telegram:update:${update.updateId}`
+    });
     options.logger.error(
       {
         ...(error instanceof Error ? { err: error } : { error }),
@@ -246,13 +283,64 @@ async function resolveTelegramThreadId(
 
   if (currentThreadId !== null) {
     await options.threadSelectionStore.setCurrent(contextKey, currentThreadId);
+    trace("telegram", "thread resolved from selection", {
+      updateId: update.updateId,
+      threadId: currentThreadId
+    });
     return currentThreadId;
   }
 
   const thread = await options.threadStore.create({});
   await options.threadSelectionStore.setCurrent(contextKey, thread.threadId);
+  trace("telegram", "thread created for chat", {
+    updateId: update.updateId,
+    threadId: thread.threadId
+  });
 
   return thread.threadId;
+}
+
+async function persistTelegramThreadContext(
+  threadId: string,
+  update: TelegramAcceptedWebhookUpdate,
+  options: TelegramUpdateProcessorOptions
+): Promise<void> {
+  const thread = await options.threadStore.get(threadId);
+
+  if (thread === null) {
+    return;
+  }
+
+  const nextChatId = update.message.chatId;
+  const nextChatType = update.message.chatType;
+  const currentTelegramContext = thread.threadMetadata.deliveryContext.telegram;
+
+  if (
+    currentTelegramContext?.chatId === nextChatId &&
+    currentTelegramContext.chatType === nextChatType
+  ) {
+    return;
+  }
+
+  const patchedThread = applyThreadMetadataPatch(thread, {
+    threadMetadata: {
+      deliveryContext: {
+        ...thread.threadMetadata.deliveryContext,
+        telegram: {
+          chatId: nextChatId,
+          chatType: nextChatType
+        }
+      }
+    }
+  });
+  await options.threadStore.update(patchedThread);
+
+  trace("telegram", "thread chat context persisted", {
+    updateId: update.updateId,
+    threadId,
+    chatId: nextChatId,
+    chatType: nextChatType
+  });
 }
 
 async function getCurrentTelegramThreadId(

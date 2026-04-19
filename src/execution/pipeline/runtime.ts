@@ -11,6 +11,7 @@ import {
 } from "../domain/agent-execution.js";
 import type { ExecutionTurnResult } from "../execution-contracts.js";
 import type { AppExecutionServiceOptions } from "./context.js";
+import { trace, traceError } from "../../utils/trace.js";
 import {
   extractUsedTools,
   getErrorMessage,
@@ -45,6 +46,12 @@ export async function runFreshExecution(input: {
   options: AppExecutionServiceOptions;
   createPendingDecision: PendingDecisionFactory;
 }): Promise<ExecutionTurnResult> {
+  trace("execution", "run fresh execution", {
+    executionId: input.execution.executionId,
+    threadId: input.thread.threadId,
+    routeKind: input.route?.kind ?? null
+  });
+
   const started = markExecutionRunning(input.execution);
   await input.options.agentExecutionStore.update(started);
 
@@ -77,9 +84,22 @@ export async function executeWithRuntime(input: {
   }
 
   try {
+    trace("runner", "execute turn start", {
+      executionId: input.execution.executionId,
+      threadId: input.runtimeOptions.threadId ?? null,
+      agentId: input.runtimeOptions.agentId ?? null,
+      hasSerializedState: input.runtimeOptions.serializedState !== undefined
+    });
     const runtimeResult = await runtime.executeTurn(input.runtimeOptions);
     const usedTools = extractUsedTools(runtimeResult.newItems);
     const interruption = runtimeResult.interruptions[0];
+    trace("runner", "execute turn completed", {
+      executionId: input.execution.executionId,
+      activeAgentId: runtimeResult.activeAgentId,
+      lastResponseId: runtimeResult.lastResponseId,
+      interruptionCount: runtimeResult.interruptions.length,
+      usedTools: usedTools.map((tool) => tool.name)
+    });
     const pendingDecision = interruption
       ? await input.createPendingDecision({
           execution: input.execution,
@@ -103,6 +123,11 @@ export async function executeWithRuntime(input: {
             runState: runtimeResult.runState
           });
     await input.options.agentExecutionStore.update(completedExecution);
+    trace("execution", "execution persisted", {
+      executionId: completedExecution.executionId,
+      status: completedExecution.status,
+      activeAgentId: completedExecution.activeAgentId
+    });
 
     const nextThread =
       pendingDecision === null
@@ -111,6 +136,10 @@ export async function executeWithRuntime(input: {
 
     if (pendingDecision === null) {
       await input.options.threadStore.update(nextThread);
+      trace("execution", "thread updated", {
+        threadId: nextThread.threadId,
+        lastResponseId: nextThread.lastResponseId
+      });
     }
 
     return {
@@ -125,6 +154,9 @@ export async function executeWithRuntime(input: {
       pendingDecision
     };
   } catch (error) {
+    traceError("runner", "execute turn failed", error, {
+      executionId: input.execution.executionId
+    });
     const failedExecution = finishExecution(input.execution, {
       status: agentExecutionStatus.failed,
       errorCode: "execution_failed",

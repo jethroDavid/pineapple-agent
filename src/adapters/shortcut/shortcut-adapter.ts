@@ -24,6 +24,7 @@ import {
   assertValidHttpsWebhookBaseUrl,
   withTrailingSlash
 } from "../shared/webhook-url.js";
+import { trace, traceError } from "../../utils/trace.js";
 
 interface ShortcutAdapterOptions {
   apiToken?: string | null;
@@ -159,6 +160,9 @@ function registerShortcutWebhookRoute(
     webhookSecret: string;
   }
 ): void {
+  trace("shortcut", "register webhook route", {
+    path: shortcutWebhookPath
+  });
   app.post(shortcutWebhookPath, (request, reply) => {
     const rawBody = getRawRequestBody(request);
     const signature = getShortcutWebhookSignature(request.headers);
@@ -179,6 +183,7 @@ function registerShortcutWebhookRoute(
     reply.code(200).send({
       ok: true
     });
+    trace("shortcut", "webhook delivery accepted");
 
     void processShortcutWebhookDelivery(request.body, {
       agentName: options.agentName,
@@ -202,6 +207,10 @@ async function processShortcutWebhookDelivery(
     const delivery = normalizeShortcutWebhookDelivery(body);
 
     if (delivery.kind === "ignored") {
+      trace("shortcut", "webhook delivery ignored", {
+        deliveryId: delivery.deliveryId,
+        reason: delivery.reason
+      });
       options.logger.info(
         {
           deliveryId: delivery.deliveryId,
@@ -219,6 +228,10 @@ async function processShortcutWebhookDelivery(
     const comment = resolveShortcutComment(story.comments, delivery.commentId);
 
     if (shouldIgnoreShortcutStoryComment(comment, options.agentName)) {
+      trace("shortcut", "self-authored comment ignored", {
+        deliveryId: delivery.deliveryId,
+        storyPublicId: delivery.storyPublicId
+      });
       options.logger.info(
         {
           deliveryId: delivery.deliveryId,
@@ -240,8 +253,18 @@ async function processShortcutWebhookDelivery(
       workflows,
       agentName: options.agentName
     });
+    trace("shortcut", "enqueue trigger", {
+      deliveryId: delivery.deliveryId,
+      storyPublicId: delivery.storyPublicId,
+      triggerId: triggerEvent.trigger_id
+    });
 
     options.execution.enqueueTrigger(triggerEvent, (error) => {
+      traceError("shortcut", "trigger failed", error, {
+        deliveryId: delivery.deliveryId,
+        storyPublicId: delivery.storyPublicId,
+        triggerId: triggerEvent.trigger_id
+      });
       options.logger.error(
         {
           ...(error instanceof Error ? { err: error } : { error }),
@@ -253,6 +276,7 @@ async function processShortcutWebhookDelivery(
       );
     });
   } catch (error) {
+    traceError("shortcut", "webhook background processing failed", error);
     options.logger.error(
       {
         ...(error instanceof Error ? { err: error } : { error })

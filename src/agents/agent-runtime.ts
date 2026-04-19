@@ -25,6 +25,7 @@ import {
   type MCPConnectionManager
 } from "./runtime/agent-runtime-setup.js";
 import { executeAgentRuntimeTurn } from "./runtime/agent-runtime-turn.js";
+import { trace } from "../utils/trace.js";
 
 export interface AgentRuntimeOptions {
   definitionsDir: string;
@@ -113,6 +114,7 @@ export function createAgentRuntime(options: AgentRuntimeOptions): AppAgentRuntim
 
   return {
     async initialize() {
+      trace("runtime", "agent runtime initialize start");
       const initializedGraph = await initializeAgentGraph({
         options,
         projectRoot,
@@ -128,8 +130,13 @@ export function createAgentRuntime(options: AgentRuntimeOptions): AppAgentRuntim
       entrypointAgentId = initializedGraph.entrypointAgentId;
       connectionManager = initializedGraph.connectionManager;
       initialized = true;
+      trace("runtime", "agent runtime initialize done", {
+        entrypointAgentId,
+        agentCount: manifests.length
+      });
     },
     async close() {
+      trace("runtime", "agent runtime close start");
       initialized = false;
       agents.clear();
       agentIdsByInstance.clear();
@@ -146,6 +153,8 @@ export function createAgentRuntime(options: AgentRuntimeOptions): AppAgentRuntim
         await connectionManager.close();
         connectionManager = null;
       }
+
+      trace("runtime", "agent runtime closed");
     },
     isReady() {
       return initialized;

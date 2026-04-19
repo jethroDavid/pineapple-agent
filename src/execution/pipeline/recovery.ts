@@ -8,11 +8,16 @@ import {
 } from "./approval.js";
 import { runFreshExecution } from "./runtime.js";
 import { loadThread } from "./shared.js";
+import { trace } from "../../utils/trace.js";
 
 export async function handleRecoveryRequest(
   executionId: string,
   options: AppExecutionServiceOptions
 ): Promise<ExecutionTurnResult> {
+  trace("recovery", "recover execution", {
+    executionId
+  });
+
   const execution = await options.agentExecutionStore.get(executionId);
 
   if (execution === null) {
@@ -22,6 +27,9 @@ export async function handleRecoveryRequest(
   const thread = await loadThread(execution.threadId, options.threadStore);
 
   if (execution.status === agentExecutionStatus.awaitingApproval) {
+    trace("recovery", "execution awaiting approval", {
+      executionId: execution.executionId
+    });
     const pendingDecision = await options.agentExecutionDecisionStore.getPendingByExecution(
       execution.executionId
     );
@@ -40,6 +48,9 @@ export async function handleRecoveryRequest(
   }
 
   if (execution.checkpoint.runState !== null) {
+    trace("recovery", "resume execution with saved state", {
+      executionId: execution.executionId
+    });
     return await continueInterruptedExecution({
       execution,
       thread,
@@ -48,6 +59,10 @@ export async function handleRecoveryRequest(
     });
   }
 
+  trace("recovery", "re-run execution from checkpoint input", {
+    executionId: execution.executionId,
+    routeKind: execution.checkpoint.routeKind
+  });
   return await runFreshExecution({
     execution,
     thread,

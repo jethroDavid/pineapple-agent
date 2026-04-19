@@ -1,13 +1,26 @@
 import { z } from "zod";
 
-export const threadMetadataSchema = z.object({
+const telegramDeliveryContextSchema = z.object({
+  chatId: z.string().min(1),
+  chatType: z.string().min(1).nullable()
+});
+
+const deliveryContextSchema = z.object({
+  telegram: telegramDeliveryContextSchema.nullable()
+});
+
+const threadMetadataSchemaBase = z.object({
   provisionalTitle: z.boolean(),
   turnCount: z.number().int().min(0),
   categories: z.array(z.string().min(1)),
-  enrichedAt: z.string().min(1).nullable()
+  enrichedAt: z.string().min(1).nullable(),
+  deliveryContext: deliveryContextSchema.default({
+    telegram: null
+  })
 });
 
-const threadMetadataPatchSchema = threadMetadataSchema.partial();
+export const threadMetadataSchema = threadMetadataSchemaBase;
+export const threadMetadataPatchSchema = threadMetadataSchemaBase.partial();
 
 export type ThreadMetadata = z.infer<typeof threadMetadataSchema>;
 export type ThreadMetadataPatch = z.infer<typeof threadMetadataPatchSchema>;
@@ -20,6 +33,9 @@ export function createThreadMetadata(
     turnCount: 0,
     categories: [],
     enrichedAt: null,
+    deliveryContext: {
+      telegram: null
+    },
     ...patch
   });
 }

@@ -12,3 +12,9 @@ Operational rules:
 - Ask Codex to inspect, edit, and validate the repository directly instead of only describing a plan.
 
 When the coding work is done, return a concise summary of what changed and any remaining issues.
+
+Reminder scheduling rule:
+- If the user asks to set a reminder, call `cron_schedule_reminder`.
+- You must produce the cron `expression` from the user's request.
+- Use `one_time=true` for one-time reminders and `one_time=false` for recurring reminders.
+- Tool-call JSON must include exactly these keys: `expression`, `message`, `one_time`.

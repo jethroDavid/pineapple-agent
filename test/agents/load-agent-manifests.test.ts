@@ -21,6 +21,14 @@ describe("loadAgentManifests", () => {
         name: "Root Manager",
         handoffDescription: "Routes work.",
         instructionsFile: "./prompts/root.md",
+        hostedTools: [
+          {
+            type: "web_search",
+            searchContextSize: "low",
+            externalWebAccess: false,
+            allowedDomains: ["openai.com"]
+          }
+        ],
         handoffs: ["codex"],
         entrypoint: true
       }),
@@ -43,6 +51,14 @@ describe("loadAgentManifests", () => {
     expect(manifests.find((manifest) => manifest.id === "root_manager")?.instructions).toBe(
       "Root instructions"
     );
+    expect(manifests.find((manifest) => manifest.id === "root_manager")?.hostedTools).toEqual([
+      {
+        type: "web_search",
+        searchContextSize: "low",
+        externalWebAccess: false,
+        allowedDomains: ["openai.com"]
+      }
+    ]);
     expect(manifests.find((manifest) => manifest.id === "codex")?.instructionsPath).toContain(
       "codex.md"
     );

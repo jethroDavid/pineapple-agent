@@ -1,5 +1,6 @@
 import type { AppAdapter } from "../app-adapter.js";
 import { createTelegramSendMessageTool } from "./telegram-send-message-tool.js";
+import { telegramReminderTriggerPromptEnricher } from "./telegram-trigger-prompt-enricher.js";
 import {
   telegramInboundMode
 } from "./telegram-inbound-mode.js";
@@ -39,6 +40,9 @@ export function createTelegramAdapter(
           client
         })
       ];
+    },
+    getTriggerPromptEnrichers() {
+      return [telegramReminderTriggerPromptEnricher];
     },
     registerRoutes(app, context) {
       if (

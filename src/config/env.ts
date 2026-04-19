@@ -37,8 +37,45 @@ const optionalTelegramInboundMode = z.preprocess((value) => {
   return trimmed === "" ? undefined : trimmed;
 }, z.enum(["outbound_only", "polling", "webhook"]).optional());
 
+const optionalBoolean = z.preprocess((value) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim().toLowerCase();
+
+  if (trimmed === "") {
+    return undefined;
+  }
+
+  if (["true", "1", "yes", "on"].includes(trimmed)) {
+    return true;
+  }
+
+  if (["false", "0", "no", "off"].includes(trimmed)) {
+    return false;
+  }
+
+  return value;
+}, z.boolean().optional());
+
+const optionalLogLevel = z.preprocess((value) => {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim().toLowerCase();
+  return trimmed === "" ? undefined : trimmed;
+}, z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).optional());
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  LOG_LEVEL: optionalLogLevel,
+  TRACE_CONSOLE: optionalBoolean,
   HOST: z.string().default("0.0.0.0"),
   PORT: z.coerce.number().int().positive().default(3000),
   DATABASE_URL: optionalString,
@@ -46,6 +83,8 @@ const envSchema = z.object({
   OPENAI_MODEL: optionalString,
   CODEX_MODEL: optionalString,
   PINEAPPLE_AGENTS_DIR: optionalString,
+  CRON_ENABLED: optionalBoolean,
+  CRON_JOBS_JSON: optionalString,
   SHORTCUT_API_TOKEN: optionalString,
   SHORTCUT_WEBHOOK_SECRET: optionalString,
   SHORTCUT_WEBHOOK_BASE_URL: optionalString,

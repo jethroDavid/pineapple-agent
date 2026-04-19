@@ -3,6 +3,7 @@ import type { ThreadStore } from "../../threads/store/thread-store.js";
 import type { PineappleDaemon } from "../queue/pineapple-daemon.js";
 import type { AgentExecutionDecisionStore } from "../store/agent-execution-decision-store.js";
 import type { AgentExecutionStore } from "../store/agent-execution-store.js";
+import type { TriggerPromptEnricher } from "./trigger-prompt-enrichment.js";
 
 export interface AppExecutionServiceOptions {
   daemon: PineappleDaemon<unknown> | null;
@@ -10,4 +11,5 @@ export interface AppExecutionServiceOptions {
   threadStore: ThreadStore;
   agentExecutionStore: AgentExecutionStore;
   agentExecutionDecisionStore: AgentExecutionDecisionStore;
+  triggerPromptEnrichers?: TriggerPromptEnricher[];
 }

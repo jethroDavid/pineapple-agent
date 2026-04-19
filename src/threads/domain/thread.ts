@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   createThreadMetadata,
   mergeThreadMetadata,
+  threadMetadataPatchSchema,
   threadMetadataSchema,
   type ThreadMetadata,
   type ThreadMetadataPatch
@@ -41,7 +42,7 @@ const newThreadSchema = z
     subjectId: z.string().min(1).nullable().optional(),
     title: z.string().nullable().optional(),
     description: z.string().nullable().optional(),
-    threadMetadata: threadMetadataSchema.partial().optional(),
+    threadMetadata: threadMetadataPatchSchema.optional(),
     lastResponseId: z.string().min(1).nullable().optional()
   })
   .transform((input) => ({
@@ -60,7 +61,7 @@ function newThreadSchemaBase() {
   return subjectBindingSchema.extend({
     title: z.string().min(1).max(120).nullable(),
     description: z.string().min(1).max(280).nullable(),
-    threadMetadata: threadMetadataSchema.partial(),
+    threadMetadata: threadMetadataPatchSchema,
     lastResponseId: z.string().min(1).nullable()
   });
 }

@@ -10,6 +10,7 @@ import {
 import type { ExecutionRequest, ExecutionTurnResult } from "../execution-contracts.js";
 import type { AppExecutionServiceOptions } from "./context.js";
 import type { Thread } from "../../threads/domain/thread.js";
+import { trace } from "../../utils/trace.js";
 import {
   getRawToolCallId,
   loadThread,
@@ -34,6 +35,11 @@ export async function handleDecisionResolutionRequest(
   request: Extract<ExecutionRequest, { kind: "decision_resolution" }>,
   options: AppExecutionServiceOptions
 ): Promise<DecisionResolutionRequestResult> {
+  trace("approval", "resolve decision", {
+    decisionId: request.decisionId,
+    resolution: request.resolution
+  });
+
   const decision = await options.agentExecutionDecisionStore.get(request.decisionId);
 
   if (decision === null) {
@@ -58,6 +64,11 @@ export async function handleDecisionResolutionRequest(
     request.decisionId,
     request.resolution as never
   );
+  trace("approval", "decision resolved", {
+    decisionId: resolvedDecision.decisionId,
+    status: resolvedDecision.status,
+    executionId: resolvedDecision.executionId
+  });
 
   if (resolvedDecision.status !== agentExecutionDecisionStatus.approved) {
     const canceledExecution = cancelExecutionAfterTerminalDecision(execution);
@@ -98,6 +109,12 @@ export async function continueInterruptedExecution(input: {
   decision: AgentExecutionDecision | null;
   options: AppExecutionServiceOptions;
 }): Promise<ExecutionTurnResult> {
+  trace("approval", "continue interrupted execution", {
+    executionId: input.execution.executionId,
+    threadId: input.thread.threadId,
+    decisionId: input.decision?.decisionId ?? null
+  });
+
   const started = markExecutionRunning(input.execution);
   await input.options.agentExecutionStore.update(started);
 
@@ -127,7 +144,7 @@ export async function createPendingDecision(
 
   const toolArguments = parseToolArguments(input.interruption.arguments);
 
-  return await input.options.agentExecutionDecisionStore.create({
+  const decision = await input.options.agentExecutionDecisionStore.create({
     executionId: input.execution.executionId,
     threadId: input.thread.threadId,
     reasonCode: "approval_required",
@@ -141,4 +158,12 @@ export async function createPendingDecision(
       tool_arguments: toolArguments
     }
   });
+
+  trace("approval", "pending decision created", {
+    decisionId: decision.decisionId,
+    executionId: decision.executionId,
+    toolName: decision.toolName
+  });
+
+  return decision;
 }

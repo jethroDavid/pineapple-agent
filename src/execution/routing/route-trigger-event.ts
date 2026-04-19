@@ -7,6 +7,7 @@ import {
 import type { Thread } from "../../threads/domain/thread.js";
 import type { ThreadStore } from "../../threads/store/thread-store.js";
 import { resolveSubjectThread } from "./resolve-subject-thread.js";
+import { trace } from "../../utils/trace.js";
 
 export const triggerRouteKind = {
   directThread: "direct_thread",
@@ -48,6 +49,9 @@ export async function routeTriggerEvent(
   triggerEvent: TriggerEvent,
   dependencies: RouteTriggerEventDependencies
 ): Promise<TriggerRouteResult> {
+  trace("routing", "resolve trigger route", {
+    triggerId: triggerEvent.trigger_id
+  });
   const { threadStore } = dependencies;
 
   if (hasDirectThreadRouting(triggerEvent)) {
@@ -60,6 +64,10 @@ export async function routeTriggerEvent(
         `Thread ${threadId} was not found.`
       );
     }
+    trace("routing", "direct thread route", {
+      triggerId: triggerEvent.trigger_id,
+      threadId
+    });
 
     return {
       kind: triggerRouteKind.directThread,
@@ -73,6 +81,12 @@ export async function routeTriggerEvent(
     const existingThread = await resolveSubjectThread(subjectType, subjectId, threadStore);
 
     if (existingThread !== null) {
+      trace("routing", "subject matched existing thread", {
+        triggerId: triggerEvent.trigger_id,
+        threadId: existingThread.threadId,
+        subjectType,
+        subjectId
+      });
       return {
         kind: triggerRouteKind.subjectMatch,
         thread: existingThread
@@ -80,6 +94,12 @@ export async function routeTriggerEvent(
     }
 
     const thread = await threadStore.create({
+      subjectType,
+      subjectId
+    });
+    trace("routing", "subject created new thread", {
+      triggerId: triggerEvent.trigger_id,
+      threadId: thread.threadId,
       subjectType,
       subjectId
     });
@@ -92,6 +112,10 @@ export async function routeTriggerEvent(
 
   if (allowsUnboundThread(triggerEvent)) {
     const thread = await threadStore.create({});
+    trace("routing", "created unbound thread", {
+      triggerId: triggerEvent.trigger_id,
+      threadId: thread.threadId
+    });
 
     return {
       kind: triggerRouteKind.unboundCreate,

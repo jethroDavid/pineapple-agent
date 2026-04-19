@@ -8,6 +8,7 @@ import {
   type AppExecutionService
 } from "../../execution/pipeline/service.js";
 import type { ExecutionTurnResult } from "../../execution/execution-contracts.js";
+import { trace } from "../../utils/trace.js";
 
 interface AppRuntime {
   adapters: AppAdapter[];
@@ -24,6 +25,7 @@ export function createAppRuntime(): AppRuntime | null {
   const services = createAppServices();
 
   if (services === null) {
+    trace("startup", "runtime disabled: missing OPENAI_API_KEY or OPENAI_MODEL");
     return null;
   }
 
@@ -46,7 +48,8 @@ export function createAppRuntime(): AppRuntime | null {
     agentRuntime,
     threadStore: services.threadStore,
     agentExecutionStore: services.agentExecutionStore,
-    agentExecutionDecisionStore: services.agentExecutionDecisionStore
+    agentExecutionDecisionStore: services.agentExecutionDecisionStore,
+    triggerPromptEnrichers: services.triggerPromptEnrichers
   });
 
   return {
@@ -55,12 +58,19 @@ export function createAppRuntime(): AppRuntime | null {
     execution,
     agentRuntime,
     async initializeAdapters(context) {
+      trace("startup", "initialize adapters start", {
+        count: adapters.length
+      });
       for (const adapter of adapters) {
+        trace("startup", "initialize adapter", {
+          adapter: adapter.name
+        });
         await adapter.initialize?.({
           ...context,
           execution
         });
       }
+      trace("startup", "initialize adapters done");
     },
     async initializeAgentRuntime() {
       await agentRuntime?.initialize();
