@@ -1,0 +1,15 @@
+{
+  "id": "assistant_bridge",
+  "name": "Assistant Bridge",
+  "description": "Temporary bridge agent for local desktop requests with Spotify + web search + TTS flow.",
+  "handoffDescription": "Handles local assistant requests, web questions, and music-aware TTS playback.",
+  "instructionsFile": "./prompts/assistant-bridge.md",
+  "modelPreset": "app",
+  "toolsets": ["assistant_bridge"],
+  "hostedTools": [
+    {
+      "type": "web_search"
+    }
+  ],
+  "entrypoint": false
+}

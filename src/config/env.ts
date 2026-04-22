@@ -83,8 +83,28 @@ const envSchema = z.object({
   OPENAI_MODEL: optionalString,
   CODEX_MODEL: optionalString,
   PINEAPPLE_AGENTS_DIR: optionalString,
+  EXECUTION_TURN_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .optional(),
+  RECOVERY_ENABLED: optionalBoolean,
   CRON_ENABLED: optionalBoolean,
   CRON_JOBS_JSON: optionalString,
+  ASSISTANT_BRIDGE_ENABLED: optionalBoolean,
+  ASSISTANT_BRIDGE_AGENT_ID: optionalString,
+  ASSISTANT_BRIDGE_DEFAULT_ACTOR_ID: optionalString,
+  ASSISTANT_BRIDGE_SPOTIFY_CLIENT_ID: optionalString,
+  ASSISTANT_BRIDGE_SPOTIFY_TOKEN_FILE: optionalString,
+  ASSISTANT_BRIDGE_SPOTIFY_DEVICE: optionalString,
+  ASSISTANT_BRIDGE_OPENAI_TTS_MODEL: optionalString,
+  ASSISTANT_BRIDGE_OPENAI_TTS_VOICE: optionalString,
+  ASSISTANT_BRIDGE_OPENAI_TTS_INSTRUCTIONS: optionalString,
+  ASSISTANT_BRIDGE_TTS_RESUME_PADDING_MS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .optional(),
   SHORTCUT_API_TOKEN: optionalString,
   SHORTCUT_WEBHOOK_SECRET: optionalString,
   SHORTCUT_WEBHOOK_BASE_URL: optionalString,

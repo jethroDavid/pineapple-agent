@@ -6,9 +6,10 @@ import {
 import type { AgentThreadStore } from "../../agents/store/agent-thread-store.js";
 import type { SpecialistSessionStore } from "../../agents/store/specialist-session-store.js";
 import { createAppAdapters } from "../../adapters/create-app-adapters.js";
+import { createDefaultAdapterPlugins } from "../../adapters/default-adapter-plugins.js";
 import { env } from "../../config/env.js";
 import type { ThreadStore } from "../../threads/store/thread-store.js";
-import type { ToolRegistry } from "../../tools/tool-registry.js";
+import { ToolRegistry } from "../../tools/tool-registry.js";
 import { DrizzleAgentThreadStore } from "../../db/stores/agent-thread-store.js";
 import { DrizzleAgentExecutionDecisionStore } from "../../db/stores/agent-execution-decision-store.js";
 import { DrizzleAgentExecutionStore } from "../../db/stores/agent-execution-store.js";
@@ -16,9 +17,9 @@ import { DrizzleSpecialistSessionStore } from "../../db/stores/specialist-sessio
 import { DrizzleThreadStore } from "../../db/stores/thread-store.js";
 import type { AgentExecutionDecisionStore } from "../../execution/store/agent-execution-decision-store.js";
 import type { AgentExecutionStore } from "../../execution/store/agent-execution-store.js";
-import { createAppToolRegistry } from "../../tools/create-app-tool-registry.js";
 import { trace } from "../../utils/trace.js";
 import type { TriggerPromptEnricher } from "../../execution/pipeline/trigger-prompt-enrichment.js";
+import type { ToolDefinition } from "../../tools/tool-definition.js";
 
 interface AppServices {
   adapters: AppAdapter[];
@@ -49,14 +50,29 @@ export function createAppServices(): AppServices | null {
   const triggerPromptEnrichers = adapters.flatMap(
     (adapter) => adapter.getTriggerPromptEnrichers?.() ?? []
   );
-  const toolRegistry = createAppToolRegistry(adapters);
+  const toolsByAdapterId: Record<string, ToolDefinition[]> = Object.fromEntries(
+    createDefaultAdapterPlugins().map((plugin) => [plugin.id, [] as ToolDefinition[]])
+  );
+  const toolRegistry = new ToolRegistry();
+
+  for (const adapter of adapters) {
+    const tools = adapter.getTools();
+    toolsByAdapterId[adapter.name] = tools;
+
+    for (const tool of tools) {
+      toolRegistry.register(tool);
+    }
+  }
+
   const agentToolsetRegistry = createAgentToolsetRegistry({
-    app: toolRegistry.list()
+    app: toolRegistry.list(),
+    ...toolsByAdapterId
   });
   trace("startup", "services ready", {
     adapterCount: adapters.length,
     adapters: adapters.map((adapter) => adapter.name),
-    toolCount: toolRegistry.list().length
+    toolCount: toolRegistry.list().length,
+    toolsets: agentToolsetRegistry.listToolsetIds()
   });
 
   return {

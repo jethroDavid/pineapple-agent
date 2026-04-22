@@ -14,6 +14,7 @@
     "check": "tsc --noEmit",
     "test": "NODE_ENV=test vitest run",
     "test:watch": "NODE_ENV=test vitest",
+    "assistant-bridge:listen": "node scripts/assistant-bridge-stream-client.mjs",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:status": "docker compose ps",

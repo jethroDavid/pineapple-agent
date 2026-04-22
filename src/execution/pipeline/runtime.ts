@@ -1,6 +1,7 @@
 import type { AgentExecuteTurnOptions, AppAgentRuntime } from "../../agents/agent-runtime.js";
 import type { Thread } from "../../threads/domain/thread.js";
 import type { TriggerRouteResult } from "../routing/route-trigger-event.js";
+import { env } from "../../config/env.js";
 import {
   agentExecutionDecisionStatus,
   type AgentExecutionDecision
@@ -90,7 +91,12 @@ export async function executeWithRuntime(input: {
       agentId: input.runtimeOptions.agentId ?? null,
       hasSerializedState: input.runtimeOptions.serializedState !== undefined
     });
-    const runtimeResult = await runtime.executeTurn(input.runtimeOptions);
+    const timeoutMs = env.EXECUTION_TURN_TIMEOUT_MS ?? 180_000;
+    const runtimeResult = await executeTurnWithTimeout(
+      runtime,
+      input.runtimeOptions,
+      timeoutMs
+    );
     const usedTools = extractUsedTools(runtimeResult.newItems);
     const interruption = runtimeResult.interruptions[0];
     trace("runner", "execute turn completed", {
@@ -165,6 +171,36 @@ export async function executeWithRuntime(input: {
     });
     await input.options.agentExecutionStore.update(failedExecution);
     throw error;
+  }
+}
+
+async function executeTurnWithTimeout(
+  runtime: AppAgentRuntime,
+  runtimeOptions: AgentExecuteTurnOptions,
+  timeoutMs: number
+): Promise<Awaited<ReturnType<AppAgentRuntime["executeTurn"]>>> {
+  let timeoutHandle: NodeJS.Timeout | null = null;
+  let timedOut = false;
+  const runtimePromise = runtime.executeTurn(runtimeOptions);
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      timedOut = true;
+      reject(new Error(`Agent turn timed out after ${timeoutMs}ms.`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([runtimePromise, timeoutPromise]);
+  } catch (error) {
+    if (timedOut) {
+      // Avoid unhandled rejections when the underlying runtime promise settles later.
+      void runtimePromise.catch(() => undefined);
+    }
+    throw error;
+  } finally {
+    if (timeoutHandle !== null) {
+      clearTimeout(timeoutHandle);
+    }
   }
 }
 

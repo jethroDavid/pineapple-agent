@@ -1,0 +1,7 @@
+{
+  "accessToken": "BQA-qOXoa-oAJjXRHAG0r0YwKcScRhRY9xx7FvNWfZ7Wd651ycbgR9eVkkePy3wCvUsqWhkLLNkLe0j68Mj2UrAOfyNiBwXIsi6pXZqPI8Fhkbp6ATarGLu5ETze8Bh70r4j1x6PhaHho0wJPX-3_7Neb_FabyAheZoaRH-46apGC1znQ6H2lev0KyRB79hpDykCvWi-rJioZQonBIc9EBLunfhJS4VmNqjadSXyoNnA9sd7EIbcNKZTFb5pWdjK3eoZHVY_fjHTrH__5ZEdS9wQQoT98ATL4amrVceQFClYSJJk0N58psLFV7ylBXbR1fAH",
+  "tokenType": "Bearer",
+  "scope": "playlist-read-private playlist-read-collaborative user-modify-playback-state playlist-modify-private playlist-modify-public user-read-playback-state",
+  "refreshToken": "AQCxAq2KJJ9i7Oc1jN8PbuNS-TWPhbUi-ajUluIh6lirZqQ71nHMUQ4TIyTdAy42NjQMmuAKBzwic9WjgOYIIdVDaqQjSVxVGOOqREiNbf9gVG1xI3dGIjVUrI4oyuYKteEzPQ",
+  "expiresAt": 1776782106130
+}

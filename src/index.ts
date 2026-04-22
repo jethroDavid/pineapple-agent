@@ -48,18 +48,6 @@ async function start() {
     }
   }
 
-  if (runtime !== null) {
-    try {
-      const recovered = await runtime.recoverActiveRuns();
-      trace("startup", "active runs recovered", {
-        count: recovered.length
-      });
-    } catch (error) {
-      traceError("startup", "active run recovery failed", error);
-      app.log.error(error, "Failed to recover active runs on startup.");
-    }
-  }
-
   try {
     await app.listen({
       host: env.HOST,
@@ -92,6 +80,27 @@ async function start() {
       process.exit(1);
     }
   }
+
+  if (runtime !== null && (env.RECOVERY_ENABLED ?? true)) {
+    void recoverActiveRunsInBackground(runtime.recoverActiveRuns, app);
+  } else if (runtime !== null) {
+    trace("startup", "active run recovery disabled");
+  }
 }
 
 void start();
+
+async function recoverActiveRunsInBackground(
+  recoverActiveRuns: () => Promise<unknown[]>,
+  app: { log: { error: (error: unknown, message: string) => void } }
+): Promise<void> {
+  try {
+    const recovered = await recoverActiveRuns();
+    trace("startup", "active runs recovered", {
+      count: recovered.length
+    });
+  } catch (error) {
+    traceError("startup", "active run recovery failed", error);
+    app.log.error(error, "Failed to recover active runs on startup.");
+  }
+}
