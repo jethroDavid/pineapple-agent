@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { jsonObjectSchema } from "../../shared/types/json.js";
+import { jsonObjectSchema } from "./json.js";
 
 const triggerInputItemSchema = jsonObjectSchema;
 const triggerInputSchema = z.union([
@@ -8,7 +8,7 @@ const triggerInputSchema = z.union([
   z.array(triggerInputItemSchema).min(1)
 ]);
 
-const triggerPromptSchema = z.object({
+export const triggerPromptSchema = z.object({
   input: triggerInputSchema,
   instructions: z.string().min(1).optional(),
   agent_id: z.string().min(1).optional()

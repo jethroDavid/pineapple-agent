@@ -1,6 +1,7 @@
-import "dotenv/config";
-
 import { defineConfig } from "drizzle-kit";
+import { loadEnvFile } from "./src/config/load-env.js";
+
+loadEnvFile();
 
 const databaseUrl = process.env.DATABASE_URL;
 

@@ -1,6 +1,7 @@
-import "dotenv/config";
-
 import { z } from "zod";
+import { loadEnvFile } from "./load-env.js";
+
+loadEnvFile();
 
 const optionalString = z.preprocess((value) => {
   if (typeof value !== "string") {

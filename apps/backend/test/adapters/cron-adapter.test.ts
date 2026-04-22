@@ -50,7 +50,7 @@ describe("createCronAdapter", () => {
         event_type: "reminder.tick"
       },
       payload: {
-        input: "Heartbeat reminder",
+        input: expect.stringContaining("Reminder: Heartbeat reminder"),
         agent_id: "codex"
       },
       routing: {

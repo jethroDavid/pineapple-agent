@@ -1,0 +1,45 @@
+{
+  "name": "@pineapple/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @pineapple/shared-contracts build && tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "check": "tsc --noEmit",
+    "test": "pnpm --filter @pineapple/shared-contracts build && cross-env NODE_ENV=test vitest run",
+    "test:watch": "pnpm --filter @pineapple/shared-contracts build && cross-env NODE_ENV=test vitest",
+    "assistant-bridge:listen": "node scripts/assistant-bridge-stream-client.mjs",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:status": "docker compose ps",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@pineapple/shared-contracts": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@openai/agents": "0.8.3",
+    "cron-parser": "^5.2.0",
+    "dotenv": "^16.6.1",
+    "drizzle-orm": "^0.44.5",
+    "fastify": "^5.6.1",
+    "openai": "^6.6.0",
+    "pg": "^8.16.3",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "@types/pg": "^8.20.0",
+    "cross-env": "^10.1.0",
+    "drizzle-kit": "^0.31.5",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
