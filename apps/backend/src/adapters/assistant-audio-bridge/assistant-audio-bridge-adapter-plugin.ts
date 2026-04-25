@@ -1,0 +1,73 @@
+import { resolve } from "node:path";
+
+import { env } from "../../config/env.js";
+import { OpenAiTtsClient } from "../../shared/openai/openai-tts-client.js";
+import type { AdapterPlugin } from "../adapter-plugin.js";
+import { createAssistantAudioBridgeAdapter } from "./assistant-audio-bridge-adapter.js";
+import { AssistantAudioBridgeSpotifyClient } from "./assistant-audio-bridge-spotify-client.js";
+
+const defaultAssistantAudioBridgeDataDir = resolve(
+  process.cwd(),
+  ".data/assistant-audio-bridge"
+);
+const defaultSpotifyTokenPath = resolve(
+  defaultAssistantAudioBridgeDataDir,
+  "spotify-token.json"
+);
+const defaultSpotifyDeviceCachePath = resolve(
+  defaultAssistantAudioBridgeDataDir,
+  "spotify-devices.json"
+);
+const defaultAudioArtifactDir = resolve(defaultAssistantAudioBridgeDataDir, "audio");
+
+export const assistantAudioBridgeAdapterPlugin: AdapterPlugin = {
+  id: "assistant_audio_bridge",
+  startupOrder: 145,
+  create(context) {
+    return createAssistantAudioBridgeAdapter({
+      enabled: env.ASSISTANT_AUDIO_BRIDGE_ENABLED === true,
+      threadStore: context.threadStore,
+      agentId: env.ASSISTANT_AUDIO_BRIDGE_AGENT_ID ?? "assistant_audio_bridge",
+      defaultActorId:
+        env.ASSISTANT_AUDIO_BRIDGE_DEFAULT_ACTOR_ID ?? "mobile-local",
+      ttsClient: createTtsClient(),
+      spotifyClient: createSpotifyClient(),
+      spotifyDeviceCachePath:
+        env.ASSISTANT_AUDIO_BRIDGE_SPOTIFY_DEVICE_CACHE_FILE ??
+        defaultSpotifyDeviceCachePath,
+      ttsResumePaddingMs:
+        env.ASSISTANT_AUDIO_BRIDGE_TTS_RESUME_PADDING_MS ?? 2_000,
+      audioArtifactDir:
+        env.ASSISTANT_AUDIO_BRIDGE_AUDIO_ARTIFACT_DIR ?? defaultAudioArtifactDir,
+      requestTtlMs: env.ASSISTANT_AUDIO_BRIDGE_RESULT_TTL_MS ?? 600_000
+    });
+  }
+};
+
+function createSpotifyClient(): AssistantAudioBridgeSpotifyClient | null {
+  const spotifyClientId = env.ASSISTANT_AUDIO_BRIDGE_SPOTIFY_CLIENT_ID;
+
+  if (!spotifyClientId) {
+    return null;
+  }
+
+  return new AssistantAudioBridgeSpotifyClient({
+    clientId: spotifyClientId,
+    tokenFilePath:
+      env.ASSISTANT_AUDIO_BRIDGE_SPOTIFY_TOKEN_FILE ?? defaultSpotifyTokenPath,
+    defaultDeviceHint: env.ASSISTANT_AUDIO_BRIDGE_SPOTIFY_DEVICE
+  });
+}
+
+function createTtsClient(): OpenAiTtsClient | null {
+  if (!env.OPENAI_API_KEY) {
+    return null;
+  }
+
+  return new OpenAiTtsClient({
+    apiKey: env.OPENAI_API_KEY,
+    model: env.ASSISTANT_AUDIO_BRIDGE_OPENAI_TTS_MODEL ?? "gpt-4o-mini-tts",
+    voice: env.ASSISTANT_AUDIO_BRIDGE_OPENAI_TTS_VOICE ?? "marin",
+    instructions: env.ASSISTANT_AUDIO_BRIDGE_OPENAI_TTS_INSTRUCTIONS
+  });
+}

@@ -4,3 +4,4 @@ dist
 .turbo
 coverage
 .data
+apps/backend/.spotify-token.json

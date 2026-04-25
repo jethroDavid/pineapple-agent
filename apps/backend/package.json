@@ -13,7 +13,6 @@
     "check": "tsc --noEmit",
     "test": "pnpm --filter @pineapple/shared-contracts build && cross-env NODE_ENV=test vitest run",
     "test:watch": "pnpm --filter @pineapple/shared-contracts build && cross-env NODE_ENV=test vitest",
-    "assistant-bridge:listen": "node scripts/assistant-bridge-stream-client.mjs",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:status": "docker compose ps",
@@ -22,15 +21,16 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@pineapple/shared-contracts": "workspace:*",
     "@modelcontextprotocol/sdk": "1.29.0",
     "@openai/agents": "0.8.3",
+    "@pineapple/shared-contracts": "workspace:*",
     "cron-parser": "^5.2.0",
     "dotenv": "^16.6.1",
     "drizzle-orm": "^0.44.5",
     "fastify": "^5.6.1",
     "openai": "^6.6.0",
     "pg": "^8.16.3",
+    "wavefile": "^11.0.0",
     "zod": "^4.1.11"
   },
   "devDependencies": {

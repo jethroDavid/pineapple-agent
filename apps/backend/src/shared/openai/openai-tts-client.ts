@@ -1,4 +1,4 @@
-export interface AssistantBridgeOpenAiTtsConfig {
+export interface OpenAiTtsClientConfig {
   apiKey: string;
   model: string;
   voice: string;
@@ -6,8 +6,8 @@ export interface AssistantBridgeOpenAiTtsConfig {
   timeoutMs?: number;
 }
 
-export class AssistantBridgeOpenAiTtsClient {
-  constructor(private readonly config: AssistantBridgeOpenAiTtsConfig) {}
+export class OpenAiTtsClient {
+  constructor(private readonly config: OpenAiTtsClientConfig) {}
 
   async synthesize(text: string): Promise<Buffer> {
     const trimmedText = text.trim();

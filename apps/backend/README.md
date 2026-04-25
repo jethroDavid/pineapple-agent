@@ -50,25 +50,29 @@ Console tracing:
 
 - Set `TRACE_CONSOLE=true` to print `[scope] ...` traces for daemon, runner, tools, and adapters.
 
-Assistant bridge (temporary desktop ingress + mock stream for future app migration):
+Assistant audio bridge (mobile POC audio streaming):
 
-- Set `ASSISTANT_BRIDGE_ENABLED=true`.
-- Configure Spotify + OpenAI TTS env values (`ASSISTANT_BRIDGE_SPOTIFY_*`, `ASSISTANT_BRIDGE_OPENAI_TTS_*`) and `OPENAI_API_KEY`.
-- Ensure your Spotify token has playback scopes: `user-modify-playback-state` and `user-read-playback-state`.
-- Optional: tune post-TTS resume delay with `ASSISTANT_BRIDGE_TTS_RESUME_PADDING_MS` (default `2000`).
-- Submit local requests via `POST /adapters/assistant-bridge/request`.
-- Subscribe to stream events via `GET /adapters/assistant-bridge/ws` (SSE event stream).
-- Save/replay streamed TTS audio locally:
-  - `pnpm assistant-bridge:listen`
-  - with auto-open player: `pnpm assistant-bridge:listen -- --autoplay`
+- Set `ASSISTANT_AUDIO_BRIDGE_ENABLED=true`.
+- Set `ASSISTANT_AUDIO_BRIDGE_AGENT_ID=assistant_audio_bridge` (or another non-entrypoint agent id).
+- Optional: tune OpenAI TTS with `ASSISTANT_AUDIO_BRIDGE_OPENAI_TTS_MODEL`, `ASSISTANT_AUDIO_BRIDGE_OPENAI_TTS_VOICE`, and `ASSISTANT_AUDIO_BRIDGE_OPENAI_TTS_INSTRUCTIONS`.
+- Optional: enable Spotify pause/resume and music-control tools with `ASSISTANT_AUDIO_BRIDGE_SPOTIFY_CLIENT_ID`, `ASSISTANT_AUDIO_BRIDGE_SPOTIFY_TOKEN_FILE`, and `ASSISTANT_AUDIO_BRIDGE_SPOTIFY_DEVICE`.
+- Optional: persist generated WAV files with `ASSISTANT_AUDIO_BRIDGE_AUDIO_ARTIFACT_DIR` (default `.data/assistant-audio-bridge/audio`).
+- Optional: tune post-TTS resume timing with `ASSISTANT_AUDIO_BRIDGE_TTS_RESUME_PADDING_MS` (default `2000`).
+- Optional: tune response retention with `ASSISTANT_AUDIO_BRIDGE_RESULT_TTL_MS` (default `600000`).
+- Submit requests via `POST /adapters/assistant-audio-bridge/requests`.
+- Poll request lifecycle via `GET /adapters/assistant-audio-bridge/requests/:requestId`.
+- Stream generated assistant audio via `GET /adapters/assistant-audio-bridge/requests/:requestId/audio`.
+- Acknowledge client playback completion via `POST /adapters/assistant-audio-bridge/requests/:requestId/playback-complete`.
 
 ## Runtime Endpoints
 ```bash
 GET /health
 GET /daemon
 POST /triggers
-POST /adapters/assistant-bridge/request
-GET /adapters/assistant-bridge/ws
+POST /adapters/assistant-audio-bridge/requests
+GET /adapters/assistant-audio-bridge/requests/:requestId
+GET /adapters/assistant-audio-bridge/requests/:requestId/audio
+POST /adapters/assistant-audio-bridge/requests/:requestId/playback-complete
 ```
 
 ## Useful Commands
@@ -85,7 +89,5 @@ pnpm db:generate
 pnpm db:migrate
 pnpm db:studio
 ```
- curl -X POST http://localhost:3000/adapters/assistant-bridge/request -H "content-type: application/json" -d "{\"text\":\"die on this hill by sienna\"}"
- 
- 
- curl -X POST http://localhost:3000/adapters/assistant-bridge/request -H "content-type: application/json" -d "{\"text\":\"what is the current situation in the Strait of Hormuz?\"}"
+
+ curl -X POST http://localhost:3000/adapters/assistant-audio-bridge/requests -H "content-type: application/json" -d "{\"text\":\"give me a short coaching tip for the next kilometer\"}"

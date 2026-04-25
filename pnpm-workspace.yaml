@@ -1,3 +1,6 @@
 packages:
   - apps/*
   - packages/*
+virtualStoreDir: .pnpm
+virtualStoreDirMaxLength: 40
+peersSuffixMaxLength: 64

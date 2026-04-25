@@ -1,88 +1,47 @@
 import { promises as fs } from "node:fs";
 
-interface SpotifyTokenSet {
-  accessToken: string;
-  tokenType: string;
-  scope: string;
-  refreshToken: string;
-  expiresAt: number;
+const spotifyAccountsBase = "https://accounts.spotify.com";
+const spotifyRequestTimeoutMs = 12_000;
+
+export interface AssistantAudioBridgeSpotifyClientConfig {
+  clientId: string;
+  tokenFilePath: string;
+  defaultDeviceHint?: string;
 }
 
-interface SpotifyApiError {
-  error?: {
-    status?: number;
-    message?: string;
-  };
-}
-
-interface SpotifyDevice {
-  id?: string;
-  name?: string;
-  is_active?: boolean;
-  type?: string;
-}
-
-interface DevicesResponse {
-  devices: SpotifyDevice[];
-}
-
-interface PlaybackStateResponse {
-  is_playing?: boolean;
-  device?: {
-    id?: string;
-    name?: string;
-  };
-}
-
-interface SearchTracksResponse {
-  tracks?: {
-    items: Array<
-      | {
-          id: string;
-          name: string;
-          uri: string;
-          artists?: Array<{ name: string }>;
-        }
-      | null
-    >;
-  };
-}
-
-interface TokenResponse {
-  access_token: string;
-  token_type: string;
-  scope: string;
-  expires_in: number;
-  refresh_token?: string;
-}
-
-export interface AssistantBridgeSpotifyTrack {
-  id: string;
-  name: string;
-  uri: string;
-  artists: string[];
-}
-
-export interface AssistantBridgeSpotifyDevice {
+export interface AssistantAudioBridgeSpotifyDevice {
   id: string;
   name: string;
   isActive: boolean;
   type: string | null;
 }
 
-export interface AssistantBridgeSpotifyClientConfig {
-  clientId: string;
-  tokenFilePath: string;
-  defaultDeviceHint?: string;
+interface AssistantAudioBridgeSpotifyTokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+  tokenType: string;
+  scope?: string;
 }
 
-const spotifyAccountsBase = "https://accounts.spotify.com";
-const spotifyRequestTimeoutMs = 12_000;
+interface AssistantAudioBridgeSpotifyTrack {
+  id: string;
+  name: string;
+  uri: string;
+  artists: string[];
+}
 
-export class AssistantBridgeSpotifyClient {
-  #cachedTokens: SpotifyTokenSet | null = null;
+interface AssistantAudioBridgePlaybackState {
+  is_playing?: boolean;
+  device?: {
+    id?: string;
+  };
+}
 
-  constructor(private readonly config: AssistantBridgeSpotifyClientConfig) {}
+export class AssistantAudioBridgeSpotifyClient {
+  #cachedTokens: AssistantAudioBridgeSpotifyTokens | null = null;
+
+  constructor(private readonly config: AssistantAudioBridgeSpotifyClientConfig) {}
 
   async pause(deviceHint?: string): Promise<void> {
     const deviceId = await this.resolveDeviceId(deviceHint);
@@ -112,8 +71,6 @@ export class AssistantBridgeSpotifyClient {
       errors.push(this.toErrorMessage(error));
     }
 
-    // Fallback: retry without targeting a specific device.
-    // Some Spotify Connect setups reject explicit device_id after pauses.
     if (deviceHint !== undefined) {
       try {
         await this.request("PUT", "/me/player/play");
@@ -142,8 +99,7 @@ export class AssistantBridgeSpotifyClient {
       timeoutMs: 2_000
     }).catch(() => null);
     const targetDeviceId =
-      currentPlayback?.device?.id ??
-      (await this.resolveDeviceId(deviceHint));
+      currentPlayback?.device?.id ?? (await this.resolveDeviceId(deviceHint));
 
     await this.request("PUT", "/me/player/pause", {
       query: {
@@ -151,7 +107,6 @@ export class AssistantBridgeSpotifyClient {
       },
       timeoutMs: 4_000
     }).catch(async () => {
-      // Retry without device target; some sessions reject explicit device IDs.
       await this.request("PUT", "/me/player/pause", {
         timeoutMs: 4_000
       });
@@ -160,7 +115,6 @@ export class AssistantBridgeSpotifyClient {
     let paused = await this.waitUntilPlaybackStops(timeoutMs, pollIntervalMs);
 
     if (!paused && targetDeviceId !== undefined) {
-      // One more fallback attempt without explicit device targeting.
       await this.request("PUT", "/me/player/pause", {
         timeoutMs: 4_000
       }).catch(() => undefined);
@@ -176,7 +130,7 @@ export class AssistantBridgeSpotifyClient {
   async playFromQuery(
     query: string,
     deviceHint?: string
-  ): Promise<AssistantBridgeSpotifyTrack> {
+  ): Promise<AssistantAudioBridgeSpotifyTrack> {
     const track = await this.findFirstTrack(query);
 
     if (track === null) {
@@ -192,41 +146,49 @@ export class AssistantBridgeSpotifyClient {
         uris: [track.uri]
       }
     });
-
     return track;
   }
 
-  async listDevices(): Promise<AssistantBridgeSpotifyDevice[]> {
-    const response = await this.request<DevicesResponse>("GET", "/me/player/devices", {
+  async listDevices(): Promise<AssistantAudioBridgeSpotifyDevice[]> {
+    const response = await this.request("GET", "/me/player/devices", {
       expectJson: true
     });
 
-    return (response?.devices ?? [])
+    return ((response as { devices?: unknown[] } | null)?.devices ?? [])
       .flatMap((device) => {
-        if (!device?.id || !device.name) {
+        const candidate = device as {
+          id?: unknown;
+          name?: unknown;
+          is_active?: unknown;
+          type?: unknown;
+        };
+
+        if (typeof candidate.id !== "string" || typeof candidate.name !== "string") {
           return [];
         }
 
         return [
           {
-            id: device.id,
-            name: device.name,
-            isActive: device.is_active === true,
-            type: device.type ?? null
+            id: candidate.id,
+            name: candidate.name,
+            isActive: candidate.is_active === true,
+            type: typeof candidate.type === "string" ? candidate.type : null
           }
         ];
       })
       .sort((left, right) => left.name.localeCompare(right.name));
   }
 
-  async findFirstTrack(query: string): Promise<AssistantBridgeSpotifyTrack | null> {
+  async findFirstTrack(
+    query: string
+  ): Promise<AssistantAudioBridgeSpotifyTrack | null> {
     const trimmed = query.trim();
 
     if (!trimmed) {
       throw new Error("Spotify search query must not be empty.");
     }
 
-    const response = await this.request<SearchTracksResponse>("GET", "/search", {
+    const response = await this.request("GET", "/search", {
       query: {
         q: trimmed,
         type: "track",
@@ -234,9 +196,18 @@ export class AssistantBridgeSpotifyClient {
       },
       expectJson: true
     });
-    const track = response?.tracks?.items?.[0] ?? null;
+    const track = (response as {
+      tracks?: {
+        items?: Array<{
+          id?: string;
+          uri?: string;
+          name?: string;
+          artists?: Array<{ name?: string }>;
+        }>;
+      };
+    } | null)?.tracks?.items?.[0] ?? null;
 
-    if (!track || !track.id || !track.uri || !track.name) {
+    if (!track?.id || !track.uri || !track.name) {
       return null;
     }
 
@@ -244,24 +215,30 @@ export class AssistantBridgeSpotifyClient {
       id: track.id,
       name: track.name,
       uri: track.uri,
-      artists: (track.artists ?? []).map((artist) => artist.name).filter(Boolean)
+      artists: (track.artists ?? [])
+        .map((artist) => artist.name)
+        .filter((name): name is string => Boolean(name))
     };
   }
 
-  async getPlaybackState(options: { timeoutMs?: number } = {}): Promise<PlaybackStateResponse | null> {
-    return this.request<PlaybackStateResponse>("GET", "/me/player", {
+  async getPlaybackState(
+    options: {
+      timeoutMs?: number;
+    } = {}
+  ): Promise<AssistantAudioBridgePlaybackState | null> {
+    return (await this.request("GET", "/me/player", {
       expectJson: true,
       timeoutMs: options.timeoutMs
-    });
+    })) as AssistantAudioBridgePlaybackState | null;
   }
 
-  private async getTokens(): Promise<SpotifyTokenSet> {
+  private async getTokens(): Promise<AssistantAudioBridgeSpotifyTokens> {
     if (this.#cachedTokens) {
       return this.#cachedTokens;
     }
 
     const raw = await fs.readFile(this.config.tokenFilePath, "utf8");
-    const tokens = JSON.parse(raw) as SpotifyTokenSet;
+    const tokens = JSON.parse(raw) as Partial<AssistantAudioBridgeSpotifyTokens>;
 
     if (
       !tokens.accessToken ||
@@ -272,11 +249,17 @@ export class AssistantBridgeSpotifyClient {
       throw new Error("Spotify token file is missing required fields.");
     }
 
-    this.#cachedTokens = tokens;
-    return tokens;
+    this.#cachedTokens = {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresAt: tokens.expiresAt,
+      tokenType: tokens.tokenType,
+      scope: tokens.scope
+    };
+    return this.#cachedTokens;
   }
 
-  private isExpiringSoon(tokens: SpotifyTokenSet): boolean {
+  private isExpiringSoon(tokens: AssistantAudioBridgeSpotifyTokens): boolean {
     return tokens.expiresAt <= Date.now() + 60_000;
   }
 
@@ -288,15 +271,21 @@ export class AssistantBridgeSpotifyClient {
     }
 
     const refreshed = await this.refreshTokens(tokens);
-    await fs.writeFile(this.config.tokenFilePath, `${JSON.stringify(refreshed, null, 2)}\n`, {
-      encoding: "utf8",
-      mode: 0o600
-    });
+    await fs.writeFile(
+      this.config.tokenFilePath,
+      `${JSON.stringify(refreshed, null, 2)}\n`,
+      {
+        encoding: "utf8",
+        mode: 0o600
+      }
+    );
     this.#cachedTokens = refreshed;
     return refreshed.accessToken;
   }
 
-  private async refreshTokens(tokens: SpotifyTokenSet): Promise<SpotifyTokenSet> {
+  private async refreshTokens(
+    tokens: AssistantAudioBridgeSpotifyTokens
+  ): Promise<AssistantAudioBridgeSpotifyTokens> {
     const controller = new AbortController();
     const timeout = setTimeout(() => {
       controller.abort();
@@ -326,13 +315,19 @@ export class AssistantBridgeSpotifyClient {
       clearTimeout(timeout);
     }
 
-    const json = (await response.json()) as TokenResponse & {
-      error?: string;
+    const json = (await response.json()) as {
+      access_token?: string;
+      token_type?: string;
+      scope?: string;
+      refresh_token?: string;
+      expires_in?: number;
       error_description?: string;
+      error?: string;
     };
 
-    if (!response.ok) {
-      const message = json.error_description ?? json.error ?? "Spotify token refresh failed.";
+    if (!response.ok || !json.access_token || !json.token_type || !json.expires_in) {
+      const message =
+        json.error_description ?? json.error ?? "Spotify token refresh failed.";
       throw new Error(message);
     }
 
@@ -396,16 +391,16 @@ export class AssistantBridgeSpotifyClient {
     return url;
   }
 
-  private async request<T>(
+  private async request(
     method: string,
     path: string,
     options: {
-      body?: unknown;
       query?: Record<string, string | undefined>;
+      body?: Record<string, unknown>;
       expectJson?: boolean;
       timeoutMs?: number;
     } = {}
-  ): Promise<T | null> {
+  ): Promise<unknown | null> {
     const accessToken = await this.ensureAccessToken();
     const controller = new AbortController();
     const timeout = setTimeout(() => {
@@ -442,7 +437,11 @@ export class AssistantBridgeSpotifyClient {
       let message = `Spotify API request failed (${response.status})`;
 
       if (contentType.includes("application/json")) {
-        const errorBody = (await response.json().catch(() => ({}))) as SpotifyApiError;
+        const errorBody = (await response.json().catch(() => ({}))) as {
+          error?: {
+            message?: string;
+          };
+        };
         message = errorBody.error?.message ?? message;
       } else {
         const text = (await response.text()).trim();
@@ -459,7 +458,7 @@ export class AssistantBridgeSpotifyClient {
       return null;
     }
 
-    return (await response.json()) as T;
+    return await response.json();
   }
 
   private toErrorMessage(error: unknown): string {

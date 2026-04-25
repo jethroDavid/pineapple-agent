@@ -1,0 +1,15 @@
+{
+  "id": "assistant_audio_bridge",
+  "name": "Assistant Audio Bridge",
+  "description": "Audio-first bridge agent for mobile requests.",
+  "handoffDescription": "Handles mobile audio bridge requests with concise spoken-ready answers.",
+  "instructionsFile": "./prompts/assistant-audio-bridge.md",
+  "modelPreset": "app",
+  "toolsets": ["assistant_audio_bridge"],
+  "hostedTools": [
+    {
+      "type": "web_search"
+    }
+  ],
+  "entrypoint": false
+}
