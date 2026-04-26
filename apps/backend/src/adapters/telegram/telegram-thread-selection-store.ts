@@ -5,7 +5,8 @@ import { z } from "zod";
 
 const telegramThreadSelectionStateSchema = z.object({
   version: z.literal(1),
-  contexts: z.record(z.string(), z.string().min(1))
+  contexts: z.record(z.string(), z.string().min(1)),
+  agents: z.record(z.string(), z.string().min(1)).default({})
 });
 
 type TelegramThreadSelectionState = z.infer<typeof telegramThreadSelectionStateSchema>;
@@ -14,6 +15,8 @@ export interface TelegramThreadSelectionStore {
   initialize(): Promise<void>;
   getCurrent(contextKey: string): Promise<string | null>;
   setCurrent(contextKey: string, threadId: string): Promise<void>;
+  getCurrentAgent(contextKey: string): Promise<string | null>;
+  setCurrentAgent(contextKey: string, agentId: string | null): Promise<void>;
 }
 
 interface FileTelegramThreadSelectionStoreOptions {
@@ -48,6 +51,30 @@ export class FileTelegramThreadSelectionStore
         ...state.contexts,
         [contextKey]: threadId
       }
+    });
+
+    await this.writeState(nextState);
+  }
+
+  async getCurrentAgent(contextKey: string): Promise<string | null> {
+    const state = await this.readState();
+
+    return state.agents[contextKey] ?? null;
+  }
+
+  async setCurrentAgent(contextKey: string, agentId: string | null): Promise<void> {
+    const state = await this.readState();
+    const nextAgents = { ...state.agents };
+
+    if (agentId === null) {
+      delete nextAgents[contextKey];
+    } else {
+      nextAgents[contextKey] = agentId;
+    }
+
+    const nextState = telegramThreadSelectionStateSchema.parse({
+      ...state,
+      agents: nextAgents
     });
 
     await this.writeState(nextState);
@@ -92,7 +119,8 @@ export class FileTelegramThreadSelectionStore
   private async writeFreshState(): Promise<void> {
     const initialState = telegramThreadSelectionStateSchema.parse({
       version: 1,
-      contexts: {}
+      contexts: {},
+      agents: {}
     });
     const tempFilePath = `${this.filePath}.tmp`;
 

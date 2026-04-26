@@ -385,6 +385,216 @@ describe("createTelegramAdapter", () => {
     expect(currentThreadId).toBe(firstThread.threadId);
   });
 
+  it("lists agents and selects a direct Telegram agent", async () => {
+    const threadStore = new InMemoryThreadStore();
+    const threadSelectionStore = new InMemoryTelegramThreadSelectionStore();
+    const client = createFakeTelegramBotClient({
+      webhookInfo: {
+        url: "",
+        pending_update_count: 0
+      }
+    });
+    const adapter = createTelegramAdapter({
+      botToken: "bot-token",
+      inboundMode: "webhook",
+      webhookSecret: "telegram-secret",
+      webhookBaseUrl: "https://pineapple.example.ts.net",
+      threadStore,
+      threadSelectionStore,
+      client
+    });
+    const daemon = new PineappleDaemon(async () => undefined as never);
+    daemon.start();
+
+    const app = Fastify();
+    apps.push(app);
+    adapter!.registerRoutes(app, {
+      execution: createFakeExecutionService(daemon)
+    });
+
+    await app.inject({
+      method: "POST",
+      url: telegramWebhookPath,
+      headers: {
+        [telegramWebhookSecretHeader]: "telegram-secret"
+      },
+      payload: {
+        update_id: 1007,
+        message: {
+          message_id: 60,
+          date: 1_775_526_700,
+          text: "/agents",
+          from: {
+            id: 42,
+            is_bot: false
+          },
+          chat: {
+            id: 5001,
+            type: "private"
+          }
+        }
+      }
+    });
+
+    await vi.waitFor(() => {
+      expect(client.sendMessage).toHaveBeenCalledWith({
+        chat_id: "5001",
+        text: expect.stringContaining("codex - Codex"),
+        message_thread_id: undefined
+      });
+    });
+
+    await app.inject({
+      method: "POST",
+      url: telegramWebhookPath,
+      headers: {
+        [telegramWebhookSecretHeader]: "telegram-secret"
+      },
+      payload: {
+        update_id: 1008,
+        message: {
+          message_id: 61,
+          date: 1_775_526_760,
+          text: "/agent codex",
+          from: {
+            id: 42,
+            is_bot: false
+          },
+          chat: {
+            id: 5001,
+            type: "private"
+          }
+        }
+      }
+    });
+
+    await vi.waitFor(async () => {
+      expect(await threadSelectionStore.getCurrentAgent("5001")).toBe("codex");
+    });
+    expect(client.sendMessage).toHaveBeenCalledWith({
+      chat_id: "5001",
+      text: "Current Pineapple agent set to codex",
+      message_thread_id: undefined
+    });
+
+    await app.inject({
+      method: "POST",
+      url: telegramWebhookPath,
+      headers: {
+        [telegramWebhookSecretHeader]: "telegram-secret"
+      },
+      payload: {
+        update_id: 1009,
+        message: {
+          message_id: 62,
+          date: 1_775_526_820,
+          text: "/agent auto",
+          from: {
+            id: 42,
+            is_bot: false
+          },
+          chat: {
+            id: 5001,
+            type: "private"
+          }
+        }
+      }
+    });
+
+    await vi.waitFor(async () => {
+      expect(await threadSelectionStore.getCurrentAgent("5001")).toBeNull();
+    });
+    expect(client.sendMessage).toHaveBeenCalledWith({
+      chat_id: "5001",
+      text: "Agent routing set to auto.",
+      message_thread_id: undefined
+    });
+
+    await daemon.stop();
+  });
+
+  it("attaches the selected direct agent to normal Telegram trigger payloads", async () => {
+    const enqueuedTriggers: TriggerEvent[] = [];
+    const threadStore = new InMemoryThreadStore();
+    const threadSelectionStore = new InMemoryTelegramThreadSelectionStore();
+    const existingThread = await threadStore.create({});
+    await threadSelectionStore.setCurrent("5001", existingThread.threadId);
+    await threadSelectionStore.setCurrentAgent("5001", "codex");
+    const adapter = createTelegramAdapter({
+      botToken: "bot-token",
+      inboundMode: "webhook",
+      webhookSecret: "telegram-secret",
+      webhookBaseUrl: "https://pineapple.example.ts.net",
+      threadStore,
+      threadSelectionStore,
+      client: createFakeTelegramBotClient({
+        webhookInfo: {
+          url: "",
+          pending_update_count: 0
+        }
+      })
+    });
+    const daemon = new PineappleDaemon(async (triggerEvent) => {
+      enqueuedTriggers.push(triggerEvent);
+      return {
+        route: { kind: "direct_thread", thread: { threadId: existingThread.threadId } },
+        thread: { threadId: existingThread.threadId },
+        execution: {
+          executionId: "execution-1",
+          status: "completed",
+          entrypointAgentId: "codex"
+        },
+        finalOutput: "",
+        lastResponseId: "resp-1",
+        activeAgentId: "codex",
+        activeAgentName: "Codex",
+        usedTools: [],
+        pendingDecision: null
+      } as never;
+    });
+    daemon.start();
+
+    const app = Fastify();
+    apps.push(app);
+    adapter!.registerRoutes(app, {
+      execution: createFakeExecutionService(daemon)
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: telegramWebhookPath,
+      headers: {
+        [telegramWebhookSecretHeader]: "telegram-secret"
+      },
+      payload: {
+        update_id: 1009,
+        message: {
+          message_id: 62,
+          date: 1_775_526_820,
+          text: "Inspect the repo",
+          from: {
+            id: 42,
+            is_bot: false
+          },
+          chat: {
+            id: 5001,
+            type: "private"
+          }
+        }
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => {
+      expect(enqueuedTriggers).toHaveLength(1);
+    });
+    await daemon.whenIdle();
+    expect(enqueuedTriggers[0]?.payload).toMatchObject({
+      agent_id: "codex"
+    });
+    await daemon.stop();
+  });
+
   it("configures the webhook on startup when Telegram state drifts", async () => {
     const threadStore = new InMemoryThreadStore();
     const threadSelectionStore = new InMemoryTelegramThreadSelectionStore();
@@ -414,6 +624,8 @@ describe("createTelegramAdapter", () => {
 
     expect(client.getMyCommands).toHaveBeenCalledTimes(1);
     expect(client.setMyCommands).toHaveBeenCalledWith([
+      { command: "agents", description: "List Pineapple agents" },
+      { command: "agent", description: "Select Pineapple agent routing" },
       { command: "new", description: "Start a new Pineapple thread" },
       { command: "list", description: "List recent Pineapple threads" },
       { command: "select", description: "Select a Pineapple thread" },
@@ -433,6 +645,8 @@ describe("createTelegramAdapter", () => {
     const threadSelectionStore = new InMemoryTelegramThreadSelectionStore();
     const client = createFakeTelegramBotClient({
       myCommands: [
+        { command: "agents", description: "List Pineapple agents" },
+        { command: "agent", description: "Select Pineapple agent routing" },
         { command: "new", description: "Start a new Pineapple thread" },
         { command: "list", description: "List recent Pineapple threads" },
         { command: "select", description: "Select a Pineapple thread" },
@@ -593,6 +807,21 @@ class InMemoryTelegramThreadSelectionStore implements TelegramThreadSelectionSto
   async setCurrent(contextKey: string, threadId: string): Promise<void> {
     this.records.set(contextKey, threadId);
   }
+
+  async getCurrentAgent(contextKey: string): Promise<string | null> {
+    return this.agentRecords.get(contextKey) ?? null;
+  }
+
+  async setCurrentAgent(contextKey: string, agentId: string | null): Promise<void> {
+    if (agentId === null) {
+      this.agentRecords.delete(contextKey);
+      return;
+    }
+
+    this.agentRecords.set(contextKey, agentId);
+  }
+
+  private readonly agentRecords = new Map<string, string>();
 }
 
 function createFakeTelegramBotClient(options: {
@@ -639,6 +868,37 @@ function createFakeExecutionService(
   return {
     getQueueStatus: () => daemon.getStatus(),
     canResolveDecisions: () => false,
+    listAgents: () => [
+      {
+        id: "root_manager",
+        name: "Root Manager",
+        description: "Routes work.",
+        handoffDescription: "Routes work.",
+        handoffs: ["codex"],
+        agentTools: ["codex"],
+        entrypoint: true,
+        toolsets: [],
+        sessionBackendKind: null
+      },
+      {
+        id: "codex",
+        name: "Codex",
+        description: "Coding specialist.",
+        handoffDescription: "Handles coding work.",
+        handoffs: [],
+        agentTools: [],
+        entrypoint: false,
+        toolsets: [],
+        sessionBackendKind: null
+      }
+    ],
+    getAgentSummary(agentId: string) {
+      return this.listAgents().find((agent) => agent.id === agentId) ?? null;
+    },
+    hasAgent(agentId: string) {
+      return this.getAgentSummary(agentId) !== null;
+    },
+    getEntrypointAgentId: () => "root_manager",
     submitTrigger: async (triggerEvent) => await daemon.submitTrigger(triggerEvent),
     enqueueTrigger: (triggerEvent, onError, onSuccess) =>
       daemon.enqueueTrigger(triggerEvent, onError, onSuccess),

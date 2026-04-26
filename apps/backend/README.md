@@ -81,12 +81,20 @@ Assistant audio bridge (mobile POC audio streaming):
 ```bash
 GET /health
 GET /daemon
+GET /agents
+GET /agents/:agentId
+POST /agents/runs
+POST /agents/:agentId/runs
 POST /triggers
 POST /adapters/assistant-audio-bridge/requests
 GET /adapters/assistant-audio-bridge/requests/:requestId
 GET /adapters/assistant-audio-bridge/requests/:requestId/audio
 POST /adapters/assistant-audio-bridge/requests/:requestId/playback-complete
 ```
+
+Agent manifests live in `.pineapple/agents`. See `docs/agents.md` for the
+manifest contract, direct agent routes, Telegram agent selection, and the
+one-shot prompt template for creating a new specialist.
 
 ## Useful Commands
 ```bash

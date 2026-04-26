@@ -24,7 +24,32 @@ describe("FileTelegramThreadSelectionStore", () => {
       version: 1,
       contexts: {
         "5001": "f84f61d3-465d-42aa-bf8f-9e3949713fb5"
-      }
+      },
+      agents: {}
+    });
+  });
+
+  it("persists and clears the current agent per Telegram context", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pineapple-telegram-selection-"));
+    const filePath = join(dir, "thread-selection.json");
+    const store = new FileTelegramThreadSelectionStore({
+      filePath
+    });
+
+    await store.initialize();
+    expect(await store.getCurrentAgent("5001")).toBeNull();
+
+    await store.setCurrentAgent("5001", "codex");
+
+    expect(await store.getCurrentAgent("5001")).toBe("codex");
+
+    await store.setCurrentAgent("5001", null);
+
+    expect(await store.getCurrentAgent("5001")).toBeNull();
+    expect(JSON.parse(await readFile(filePath, "utf8"))).toEqual({
+      version: 1,
+      contexts: {},
+      agents: {}
     });
   });
 });

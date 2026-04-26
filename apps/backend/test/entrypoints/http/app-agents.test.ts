@@ -46,6 +46,79 @@ describe("app agent runtime endpoint", () => {
     });
   });
 
+  it("returns one agent summary", async () => {
+    const app = buildApp({
+      agentRuntime: createFakeAgentRuntime(),
+      execution: createFakeExecutionService()
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/agents/codex"
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      agent: {
+        id: "codex",
+        name: "Codex",
+        description: "Coding specialist.",
+        handoffDescription: "Handles coding work.",
+        handoffs: [],
+        agentTools: [],
+        entrypoint: false,
+        toolsets: [],
+        sessionBackendKind: null
+      }
+    });
+  });
+
+  it("runs a direct agent route", async () => {
+    const app = buildApp({
+      agentRuntime: createFakeAgentRuntime(),
+      execution: createFakeExecutionService()
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/agents/codex/runs",
+      payload: {
+        input: "Inspect the repo"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      thread_id: "thread-1",
+      active_agent_id: "codex",
+      final_output: "done"
+    });
+  });
+
+  it("returns 404 for an unknown direct agent route", async () => {
+    const app = buildApp({
+      agentRuntime: createFakeAgentRuntime(),
+      execution: createFakeExecutionService()
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/agents/missing/runs",
+      payload: {
+        input: "Hello"
+      }
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({
+      error: "Agent was not found.",
+      message: "Agent missing was not found."
+    });
+  });
+
   it("returns 404 when the requested agent thread does not exist", async () => {
     const app = buildApp({
       agentRuntime: createFakeAgentRuntime(),

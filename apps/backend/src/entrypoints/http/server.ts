@@ -117,6 +117,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
 
     const body = agentRunRequestSchema.parse(request.body);
+    if (body.agent_id !== undefined && !agentRuntime.hasAgent(body.agent_id)) {
+      return reply.code(404).send({
+        error: "Agent was not found.",
+        message: `Agent ${body.agent_id} was not found.`
+      });
+    }
+
     if (execution === null) {
       return reply.code(503).send({
         error: "Execution service is not configured. Set OPENAI_API_KEY and OPENAI_MODEL first."
@@ -125,6 +132,82 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     const result = await execution.runTurn({
       agentId: body.agent_id,
+      input: body.input,
+      threadId: body.thread_id
+    });
+
+    return {
+      thread_id: result.thread.threadId,
+      execution_id: result.execution.executionId,
+      execution_status: result.execution.status,
+      root_agent_id: result.execution.entrypointAgentId,
+      active_agent_id: result.activeAgentId,
+      active_agent_name: result.activeAgentName,
+      final_output: result.finalOutput,
+      last_response_id: result.lastResponseId,
+      pending_decision: toPendingDecisionResponse(result.pendingDecision)
+    };
+  });
+
+  app.get("/agents/:agentId", async (request, reply) => {
+    if (agentRuntime === null) {
+      return reply.code(503).send({
+        error: "Agent runtime is not configured. Set OPENAI_API_KEY and OPENAI_MODEL first."
+      });
+    }
+
+    if (!agentRuntime.isReady()) {
+      return reply.code(503).send({
+        error: "Agent runtime is not ready yet."
+      });
+    }
+
+    const params = agentIdParamsSchema.parse(request.params);
+    const agent = agentRuntime.getAgentSummary(params.agentId);
+
+    if (agent === null) {
+      return reply.code(404).send({
+        error: "Agent was not found.",
+        message: `Agent ${params.agentId} was not found.`
+      });
+    }
+
+    return {
+      agent
+    };
+  });
+
+  app.post("/agents/:agentId/runs", async (request, reply) => {
+    if (agentRuntime === null) {
+      return reply.code(503).send({
+        error: "Agent runtime is not configured. Set OPENAI_API_KEY and OPENAI_MODEL first."
+      });
+    }
+
+    if (!agentRuntime.isReady()) {
+      return reply.code(503).send({
+        error: "Agent runtime is not ready yet."
+      });
+    }
+
+    if (execution === null) {
+      return reply.code(503).send({
+        error: "Execution service is not configured. Set OPENAI_API_KEY and OPENAI_MODEL first."
+      });
+    }
+
+    const params = agentIdParamsSchema.parse(request.params);
+
+    if (!agentRuntime.hasAgent(params.agentId)) {
+      return reply.code(404).send({
+        error: "Agent was not found.",
+        message: `Agent ${params.agentId} was not found.`
+      });
+    }
+
+    const body = agentDirectRunRequestSchema.parse(request.body);
+    const result = await execution.runTurn({
+      agentId: params.agentId,
       input: body.input,
       threadId: body.thread_id
     });
@@ -203,6 +286,15 @@ const agentRunRequestSchema = z.object({
   agent_id: z.string().min(1).optional(),
   thread_id: z.string().uuid().optional(),
   input: z.string().min(1)
+});
+
+const agentDirectRunRequestSchema = z.object({
+  thread_id: z.string().uuid().optional(),
+  input: z.string().min(1)
+});
+
+const agentIdParamsSchema = z.object({
+  agentId: z.string().min(1)
 });
 
 function toPendingDecisionResponse(decision: AgentExecutionDecision | null) {

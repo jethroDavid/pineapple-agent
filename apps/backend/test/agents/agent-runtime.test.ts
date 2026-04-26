@@ -38,6 +38,7 @@ describe("createAgentRuntime", () => {
         description: "Specialist agent.",
         handoffDescription: "Handles coding work.",
         handoffs: [],
+        agentTools: [],
         entrypoint: false,
         toolsets: [],
         sessionBackendKind: null
@@ -48,6 +49,7 @@ describe("createAgentRuntime", () => {
         description: "Routes work.",
         handoffDescription: "Routes tasks to specialists.",
         handoffs: ["codex"],
+        agentTools: ["codex"],
         entrypoint: true,
         toolsets: [],
         sessionBackendKind: null
@@ -162,6 +164,7 @@ async function createDefinitionsDir(options: { includeCodexBackend: boolean }): 
       handoffDescription: "Routes tasks to specialists.",
       instructionsFile: "./prompts/root.md",
       handoffs: ["codex"],
+      agentTools: ["codex"],
       entrypoint: true
     }),
     "utf8"

@@ -80,6 +80,7 @@ export interface AgentSummary {
   description?: string;
   handoffDescription: string;
   handoffs: string[];
+  agentTools: string[];
   entrypoint: boolean;
   toolsets: string[];
   sessionBackendKind: string | null;
@@ -90,6 +91,8 @@ export interface AppAgentRuntime {
   close(): Promise<void>;
   isReady(): boolean;
   listAgents(): AgentSummary[];
+  getAgentSummary(agentId: string): AgentSummary | null;
+  hasAgent(agentId: string): boolean;
   getEntrypointAgentId(): string | null;
   executeTurn(options: AgentExecuteTurnOptions): Promise<AgentExecuteTurnResult>;
   runTurn(options: AgentRunTurnOptions): Promise<AgentRunTurnResult>;
@@ -161,6 +164,12 @@ export function createAgentRuntime(options: AgentRuntimeOptions): AppAgentRuntim
     },
     listAgents() {
       return listAgentSummaries(manifests);
+    },
+    getAgentSummary(agentId) {
+      return this.listAgents().find((agent) => agent.id === agentId) ?? null;
+    },
+    hasAgent(agentId) {
+      return this.getAgentSummary(agentId) !== null;
     },
     getEntrypointAgentId() {
       return entrypointAgentId;

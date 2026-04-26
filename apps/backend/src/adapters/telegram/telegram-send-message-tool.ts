@@ -30,7 +30,8 @@ export function createTelegramSendMessageTool(options: {
 
   return {
     name: "telegram_send_message",
-    description: "Send a plain-text Telegram message to an existing chat using chat_id.",
+    description:
+      "Send a natural plain-text Telegram chat reply to an existing chat using chat_id. Do not use Markdown, headings, bullet lists, tables, bold or italic markers, or code fences unless the user explicitly asks for that format.",
     inputSchema: telegramSendMessageInputSchema,
     outputSchema: telegramSendMessageOutputSchema,
     sideEffecting: true,

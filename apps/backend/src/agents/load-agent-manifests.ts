@@ -60,6 +60,12 @@ export async function loadAgentManifests(definitionsDir: string): Promise<Loaded
         throw new Error(`Agent ${manifest.id} references unknown handoff ${handoffId}.`);
       }
     }
+
+    for (const agentToolId of manifest.agentTools) {
+      if (!ids.has(agentToolId)) {
+        throw new Error(`Agent ${manifest.id} references unknown agent tool ${agentToolId}.`);
+      }
+    }
   }
 
   return manifests.sort((left, right) => left.id.localeCompare(right.id));

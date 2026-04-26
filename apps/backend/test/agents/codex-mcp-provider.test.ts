@@ -21,6 +21,7 @@ describe("CodexMcpProvider", () => {
         replyToolName: "codex-reply"
       },
       handoffs: [],
+      agentTools: [],
       entrypoint: false
     },
     server: {

@@ -1,0 +1,10 @@
+{
+  "id": "scheduler",
+  "name": "Scheduler",
+  "description": "Reminder and scheduled follow-up specialist.",
+  "handoffDescription": "Handles reminder creation, recurring schedules, and proactive reminder delivery.",
+  "instructionsFile": "./prompts/scheduler.md",
+  "modelPreset": "app",
+  "toolsets": ["cron", "telegram", "shortcut"],
+  "entrypoint": false
+}

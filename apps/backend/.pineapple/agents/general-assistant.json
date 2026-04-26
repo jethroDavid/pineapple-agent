@@ -1,0 +1,15 @@
+{
+  "id": "general_assistant",
+  "name": "General Assistant",
+  "description": "General-purpose assistant for ordinary questions, lightweight research, and non-coding conversation.",
+  "handoffDescription": "Handles ordinary questions, concise explanations, and web-search-backed answers when no narrower specialist is required.",
+  "instructionsFile": "./prompts/general-assistant.md",
+  "modelPreset": "app",
+  "toolsets": ["telegram", "shortcut"],
+  "hostedTools": [
+    {
+      "type": "web_search"
+    }
+  ],
+  "entrypoint": false
+}

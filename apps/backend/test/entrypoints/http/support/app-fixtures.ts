@@ -162,6 +162,33 @@ export function createFakeAgentRuntime() {
   } as never;
 }
 
+function createFakeAgentSummaries() {
+  return [
+    {
+      id: "root_manager",
+      name: "Root Manager",
+      description: "Routes work.",
+      handoffDescription: "Routes work.",
+      handoffs: ["codex"],
+      agentTools: ["codex"],
+      entrypoint: true,
+      toolsets: [],
+      sessionBackendKind: null
+    },
+    {
+      id: "codex",
+      name: "Codex",
+      description: "Coding specialist.",
+      handoffDescription: "Handles coding work.",
+      handoffs: [],
+      agentTools: [],
+      entrypoint: false,
+      toolsets: [],
+      sessionBackendKind: null
+    }
+  ];
+}
+
 export function validTriggerPayload() {
   return {
     version: 1,

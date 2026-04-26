@@ -404,6 +404,18 @@ function createExecutionHarness(): {
     canResolveDecisions() {
       return false;
     },
+    listAgents() {
+      return [];
+    },
+    getAgentSummary() {
+      return null;
+    },
+    hasAgent() {
+      return false;
+    },
+    getEntrypointAgentId() {
+      return null;
+    },
     async submitTrigger() {
       throw new Error("submitTrigger is not used in assistant-audio-bridge tests.");
     },

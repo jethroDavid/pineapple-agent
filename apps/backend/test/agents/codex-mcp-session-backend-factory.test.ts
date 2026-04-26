@@ -72,6 +72,7 @@ function createCodexManifest(overrides: {
     modelPreset: "codex",
     toolsets: [],
     handoffs: [],
+    agentTools: [],
     entrypoint: false,
     sessionBackend: {
       kind: "codex_mcp",

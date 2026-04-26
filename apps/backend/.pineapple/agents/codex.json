@@ -5,12 +5,7 @@
   "handoffDescription": "Handles repository inspection, shell execution, code edits, and validation through Codex MCP.",
   "instructionsFile": "./prompts/codex.md",
   "modelPreset": "codex",
-  "toolsets": ["app"],
-  "hostedTools": [
-    {
-      "type": "web_search"
-    }
-  ],
+  "toolsets": ["shortcut"],
   "sessionBackend": {
     "kind": "codex_mcp",
     "serverId": "codex_mcp"

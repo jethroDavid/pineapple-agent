@@ -75,6 +75,18 @@ function createFakeExecutionService(
     canResolveDecisions() {
       return false;
     },
+    listAgents() {
+      return [];
+    },
+    getAgentSummary() {
+      return null;
+    },
+    hasAgent() {
+      return false;
+    },
+    getEntrypointAgentId() {
+      return null;
+    },
     async submitTrigger() {
       throw new Error("Not used in cron adapter test.");
     },

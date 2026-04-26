@@ -1,5 +1,5 @@
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 import { describe, expect, it } from "vitest";
@@ -30,6 +30,7 @@ describe("loadAgentManifests", () => {
           }
         ],
         handoffs: ["codex"],
+        agentTools: ["codex"],
         entrypoint: true
       }),
       "utf8"
@@ -59,8 +60,51 @@ describe("loadAgentManifests", () => {
         allowedDomains: ["openai.com"]
       }
     ]);
+    expect(manifests.find((manifest) => manifest.id === "root_manager")?.agentTools).toEqual([
+      "codex"
+    ]);
+    expect(manifests.find((manifest) => manifest.id === "codex")?.agentTools).toEqual([]);
     expect(manifests.find((manifest) => manifest.id === "codex")?.instructionsPath).toContain(
       "codex.md"
     );
+  });
+
+  it("rejects agent tools that reference unknown agents", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pineapple-agents-"));
+    const promptsDir = join(root, "prompts");
+
+    await mkdir(promptsDir);
+    await writeFile(join(promptsDir, "root.md"), "Root instructions\n", "utf8");
+    await writeFile(
+      join(root, "root.json"),
+      JSON.stringify({
+        id: "root_manager",
+        name: "Root Manager",
+        handoffDescription: "Routes work.",
+        instructionsFile: "./prompts/root.md",
+        agentTools: ["missing"],
+        entrypoint: true
+      }),
+      "utf8"
+    );
+
+    await expect(loadAgentManifests(root)).rejects.toThrow(
+      "Agent root_manager references unknown agent tool missing."
+    );
+  });
+
+  it("keeps the bundled root manager as a delegation-only agent", async () => {
+    const manifests = await loadAgentManifests(resolve(".pineapple/agents"));
+    const rootManager = manifests.find((manifest) => manifest.id === "root_manager");
+
+    expect(rootManager?.hostedTools).toBeUndefined();
+    expect(rootManager?.sessionBackend).toBeUndefined();
+    expect(rootManager).toMatchObject({
+      toolsets: [],
+      mcpServers: [],
+      handoffs: ["general_assistant", "scheduler", "codex", "assistant_audio_bridge"],
+      agentTools: ["general_assistant", "scheduler", "codex", "assistant_audio_bridge"],
+      entrypoint: true
+    });
   });
 });

@@ -5,6 +5,7 @@ import type { Thread } from "../../threads/domain/thread.js";
 import { applyThreadMetadataPatch } from "../../threads/domain/thread.js";
 import type { AppExecutionService } from "../../execution/pipeline/service.js";
 import type { ExecutionTurnResult } from "../../execution/execution-contracts.js";
+import type { AgentSummary } from "../../agents/agent-runtime.js";
 import type {
   TelegramThreadSelectionStore
 } from "./telegram-thread-selection-store.js";
@@ -75,16 +76,20 @@ async function processTelegramAcceptedUpdate(
     throw new Error("Execution service is not configured. Set OPENAI_API_KEY and OPENAI_MODEL first.");
   }
 
+  const contextKey = getTelegramDeliveryContextKey(result.message);
   const threadId = await resolveTelegramThreadId(result, options);
   await persistTelegramThreadContext(threadId, result, options);
+  const agentId = await getCurrentTelegramAgentId(contextKey, options);
   const triggerEvent = createTelegramTriggerEvent({
     update: result,
-    threadId
+    threadId,
+    agentId
   });
   trace("telegram", "enqueue trigger", {
     updateId: result.updateId,
     triggerId: triggerEvent.trigger_id,
-    threadId
+    threadId,
+    agentId: agentId ?? null
   });
 
   options.execution.enqueueTrigger(triggerEvent, (error) => {
@@ -192,6 +197,54 @@ async function handleTelegramCommand(
       return {
         text: createTelegramHelpText()
       };
+    case telegramCommandName.agents: {
+      const agents = options.execution?.listAgents() ?? [];
+
+      if (agents.length === 0) {
+        return {
+          text: "Agent runtime is not configured yet."
+        };
+      }
+
+      const currentAgentId = await getCurrentTelegramAgentId(contextKey, options);
+
+      return {
+        text: createTelegramAgentsText(
+          agents,
+          options.execution?.getEntrypointAgentId() ?? null,
+          currentAgentId
+        )
+      };
+    }
+    case telegramCommandName.agent: {
+      const desiredAgentId = command.args.trim();
+
+      if (!desiredAgentId) {
+        return {
+          text: "Usage: /agent <agent-id|auto>"
+        };
+      }
+
+      if (desiredAgentId.toLowerCase() === "auto") {
+        await options.threadSelectionStore.setCurrentAgent(contextKey, null);
+
+        return {
+          text: "Agent routing set to auto."
+        };
+      }
+
+      if (options.execution === null || !options.execution.hasAgent(desiredAgentId)) {
+        return {
+          text: "Agent not found. Use /agents to see available agents."
+        };
+      }
+
+      await options.threadSelectionStore.setCurrentAgent(contextKey, desiredAgentId);
+
+      return {
+        text: `Current Pineapple agent set to ${desiredAgentId}`
+      };
+    }
     case telegramCommandName.new: {
       const requestedTitle = command.args.trim();
       const thread = await options.threadStore.create({
@@ -300,6 +353,24 @@ async function resolveTelegramThreadId(
   return thread.threadId;
 }
 
+async function getCurrentTelegramAgentId(
+  contextKey: string,
+  options: TelegramUpdateProcessorOptions
+): Promise<string | null> {
+  const currentAgentId = await options.threadSelectionStore.getCurrentAgent(contextKey);
+
+  if (currentAgentId === null) {
+    return null;
+  }
+
+  if (options.execution?.hasAgent(currentAgentId)) {
+    return currentAgentId;
+  }
+
+  await options.threadSelectionStore.setCurrentAgent(contextKey, null);
+  return null;
+}
+
 async function persistTelegramThreadContext(
   threadId: string,
   update: TelegramAcceptedWebhookUpdate,
@@ -362,12 +433,38 @@ async function getCurrentTelegramThreadId(
 function createTelegramHelpText(): string {
   return [
     "Pineapple commands:",
+    "/agents - show available Pineapple agents",
+    "/agent <agent-id|auto> - switch agent routing for this chat",
     "/new [title] - start a new Pineapple thread",
     "/list - show recent threads in this chat",
     "/select <thread-id-or-prefix> - switch the current thread",
     "/current - show the current thread",
     "/help - show this help"
   ].join("\n");
+}
+
+function createTelegramAgentsText(
+  agents: AgentSummary[],
+  entrypointAgentId: string | null,
+  currentAgentId: string | null
+): string {
+  const lines = ["Pineapple agents:"];
+
+  for (const agent of agents) {
+    const marker = agent.id === currentAgentId ? "*" : "-";
+    const defaultSuffix = agent.id === entrypointAgentId ? " (auto default)" : "";
+    lines.push(`${marker} ${agent.id}${defaultSuffix} - ${agent.name}`);
+
+    if (agent.description) {
+      lines.push(`  ${agent.description}`);
+    }
+  }
+
+  lines.push("");
+  lines.push(currentAgentId === null ? "Current: auto" : `Current: ${currentAgentId}`);
+  lines.push("Use /agent <agent-id> or /agent auto.");
+
+  return lines.join("\n");
 }
 
 function createTelegramListText(

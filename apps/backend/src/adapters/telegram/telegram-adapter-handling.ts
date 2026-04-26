@@ -29,6 +29,14 @@ import { trace, traceError } from "../../utils/trace.js";
 
 const defaultTelegramCommands: TelegramBotCommand[] = [
   {
+    command: "agents",
+    description: "List Pineapple agents"
+  },
+  {
+    command: "agent",
+    description: "Select Pineapple agent routing"
+  },
+  {
     command: "new",
     description: "Start a new Pineapple thread"
   },

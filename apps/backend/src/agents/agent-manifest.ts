@@ -44,6 +44,7 @@ export const agentManifestSchema = z.object({
   model: nonEmptyString.optional(),
   modelPreset: agentModelPresetSchema.optional(),
   handoffs: z.array(nonEmptyString).default([]),
+  agentTools: z.array(nonEmptyString).default([]),
   toolsets: z.array(nonEmptyString).default([]),
   hostedTools: z.array(hostedToolManifestSchema).optional(),
   mcpServers: z.array(stdioMcpServerManifestSchema).default([]),

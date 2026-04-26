@@ -45,7 +45,8 @@ export async function initializeAgentGraph(input: {
     trace("runtime", "initialize manifest", {
       agentId: manifest.id,
       toolsets: manifest.toolsets,
-      handoffs: manifest.handoffs
+      handoffs: manifest.handoffs,
+      agentTools: manifest.agentTools
     });
     const ownedServerIds = new Set(input.sessionBackendRegistry.getOwnedServerIds(manifest));
     const genericServers = manifest.mcpServers
@@ -103,6 +104,22 @@ export async function initializeAgentGraph(input: {
     stack.add(agentId);
 
     const handoffs = manifest.handoffs.map((handoffId) => buildAgent(handoffId, stack));
+    const agentTools = manifest.agentTools.map((agentToolId) => {
+      const toolAgent = buildAgent(agentToolId, stack);
+      const toolManifest = manifestMap.get(agentToolId);
+
+      if (!toolManifest) {
+        throw new Error(`Unknown agent ${agentToolId}.`);
+      }
+
+      return toolAgent.asTool({
+        toolName: `ask_${agentToolId}`,
+        toolDescription: [
+          `Ask the ${toolManifest.name} agent to handle a focused subtask and return its result.`,
+          toolManifest.handoffDescription
+        ].join(" ")
+      });
+    });
     const resolvedModel =
       manifest.model ??
       (manifest.modelPreset === "codex" ? input.options.codexModel : undefined) ??
@@ -118,8 +135,9 @@ export async function initializeAgentGraph(input: {
     trace("runtime", "build agent", {
       agentId,
       model: resolvedModel,
-      toolCount: localTools.length + hostedTools.length,
+      toolCount: agentTools.length + localTools.length + hostedTools.length,
       handoffCount: handoffs.length,
+      agentToolCount: agentTools.length,
       mcpServerCount: (input.mcpServersByAgentId.get(agentId) ?? []).length
     });
     const agent = new Agent<AgentRuntimeContext>({
@@ -136,7 +154,12 @@ export async function initializeAgentGraph(input: {
       handoffDescription: manifest.handoffDescription,
       model: resolvedModel,
       handoffs,
-      tools: [...localTools, ...(sessionBackend?.createTools() ?? []), ...hostedTools],
+      tools: [
+        ...agentTools,
+        ...localTools,
+        ...(sessionBackend?.createTools() ?? []),
+        ...hostedTools
+      ],
       mcpServers: input.mcpServersByAgentId.get(agentId) ?? []
     });
 
@@ -169,6 +192,7 @@ export function listAgentSummaries(manifests: LoadedAgentManifest[]): AgentSumma
     description: manifest.description,
     handoffDescription: manifest.handoffDescription,
     handoffs: manifest.handoffs,
+    agentTools: manifest.agentTools,
     entrypoint: manifest.entrypoint,
     toolsets: manifest.toolsets,
     sessionBackendKind: manifest.sessionBackend?.kind ?? null

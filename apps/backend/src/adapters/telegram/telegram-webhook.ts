@@ -18,6 +18,8 @@ type TelegramIgnoredReason =
   (typeof telegramIgnoredReason)[keyof typeof telegramIgnoredReason];
 
 export const telegramCommandName = {
+  agent: "agent",
+  agents: "agents",
   current: "current",
   help: "help",
   list: "list",
@@ -143,6 +145,7 @@ export function normalizeTelegramWebhookUpdate(
 export function createTelegramTriggerEvent(options: {
   update: TelegramAcceptedWebhookUpdate;
   threadId: string;
+  agentId?: string | null;
 }): TriggerEvent {
   const { update, threadId } = options;
 
@@ -162,7 +165,8 @@ export function createTelegramTriggerEvent(options: {
     },
     payload: {
       input: createTelegramPromptInput(update.eventType, update.message),
-      instructions: createTelegramInstructions(update.message)
+      instructions: createTelegramInstructions(update.message),
+      ...(options.agentId ? { agent_id: options.agentId } : {})
     },
     received_at: update.message.receivedAt
   });
@@ -251,7 +255,9 @@ function createTelegramPromptInput(
 function createTelegramInstructions(message: TelegramInboundMessageContext): string {
   const lines = [
     "This input came from Telegram.",
-    "Use plain text suitable for a Telegram conversation.",
+    "Reply like a natural chat message, not a formatted document.",
+    "Use plain text only: no Markdown, headings, bullet lists, tables, bold or italic markers, or code fences unless the user explicitly asks for that format.",
+    "Keep it concise and conversational, using short paragraphs only when they help readability.",
     `When you send a Telegram reply, call telegram_send_message with chat_id=${message.chatId}.`
   ];
 

@@ -6,6 +6,7 @@ import { agentExecutionStatus } from "../domain/agent-execution.js";
 import type { TriggerEvent } from "../contracts/trigger-event.js";
 import type { PineappleDaemonStatus } from "../queue/pineapple-daemon.js";
 import type { AppExecutionServiceOptions } from "./context.js";
+import type { AgentSummary } from "../../agents/agent-runtime.js";
 import { trace } from "../../utils/trace.js";
 import {
   dispatchExecutionRequest,
@@ -16,6 +17,10 @@ import type { ExecutionTurnResult } from "../execution-contracts.js";
 export interface AppExecutionService {
   getQueueStatus(): PineappleDaemonStatus | null;
   canResolveDecisions(): boolean;
+  listAgents(): AgentSummary[];
+  getAgentSummary(agentId: string): AgentSummary | null;
+  hasAgent(agentId: string): boolean;
+  getEntrypointAgentId(): string | null;
   submitTrigger(triggerEvent: TriggerEvent): Promise<ExecutionTurnResult>;
   enqueueTrigger(
     triggerEvent: TriggerEvent,
@@ -52,6 +57,18 @@ export function createAppExecutionService(
         options.agentRuntime !== undefined &&
         options.daemon !== null
       );
+    },
+    listAgents() {
+      return options.agentRuntime?.listAgents() ?? [];
+    },
+    getAgentSummary(agentId) {
+      return options.agentRuntime?.getAgentSummary(agentId) ?? null;
+    },
+    hasAgent(agentId) {
+      return options.agentRuntime?.hasAgent(agentId) ?? false;
+    },
+    getEntrypointAgentId() {
+      return options.agentRuntime?.getEntrypointAgentId() ?? null;
     },
     async submitTrigger(triggerEvent) {
       trace("execution", "service submitTrigger", {
