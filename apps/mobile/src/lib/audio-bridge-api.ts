@@ -1,8 +1,18 @@
 import { NativeModules, Platform } from "react-native";
+import { resolveAssistantAudioBridgeBaseUrl } from "./audio-bridge-base-url";
 
-export const assistantAudioBridgeBaseUrl = normalizeBaseUrl(
-  process.env.EXPO_PUBLIC_API_BASE_URL ?? resolveDefaultApiBaseUrl()
-);
+export const assistantAudioBridgeBaseUrl = resolveAssistantAudioBridgeBaseUrl({
+  apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL,
+  bundlerHost: getBundlerHost(),
+  platformOs: Platform.OS
+});
+
+if (__DEV__) {
+  const explicitApiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL ?? "<unset>";
+  console.info(
+    `[audio-bridge-api] baseUrl=${assistantAudioBridgeBaseUrl} EXPO_PUBLIC_API_BASE_URL=${explicitApiBaseUrl}`
+  );
+}
 
 export interface AssistantAudioRequestResponse {
   request_id: string;
@@ -92,32 +102,6 @@ export async function notifyAssistantPlaybackComplete(
   return (await response.json()) as AssistantPlaybackCompleteResponse;
 }
 
-function normalizeBaseUrl(url: string): string {
-  return url
-    .trim()
-    .replace(/\/+$/, "")
-    .replace(/\/api$/i, "");
-}
-
-function resolveDefaultApiBaseUrl(): string {
-  const bundlerHost = getBundlerHost();
-
-  if (bundlerHost) {
-    if (Platform.OS === "android" && isLoopbackHost(bundlerHost)) {
-      return "http://10.0.2.2:3000";
-    }
-
-    return `http://${bundlerHost}:3000`;
-  }
-
-  // Android emulators cannot reach host machine `localhost`.
-  if (Platform.OS === "android") {
-    return "http://10.0.2.2:3000";
-  }
-
-  return "http://localhost:3000";
-}
-
 function getBundlerHost(): string | null {
   const sourceCode = NativeModules?.SourceCode as
     | {
@@ -132,11 +116,6 @@ function getBundlerHost(): string | null {
 
   const match = scriptUrl.match(/^https?:\/\/([^/:]+)/i);
   return match?.[1] ?? null;
-}
-
-function isLoopbackHost(host: string): boolean {
-  const normalized = host.trim().toLowerCase();
-  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1";
 }
 
 async function toApiErrorMessage(response: Response, fallback: string): Promise<string> {

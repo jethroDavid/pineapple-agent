@@ -24,6 +24,7 @@ pnpm dev
 ## Useful Commands
 ```bash
 pnpm dev
+pnpm dev:easy
 pnpm mobile:start
 pnpm mobile:android
 pnpm mobile:ios
@@ -38,3 +39,35 @@ pnpm db:generate
 pnpm db:migrate
 pnpm db:studio
 ```
+
+## Mobile Build Guide
+
+Track local changes before and after build steps:
+
+```bash
+git status --short
+```
+
+Development (no native rebuild, JS/TS changes only):
+
+```bash
+pnpm --filter mobile exec expo start --dev-client
+```
+
+Development rebuild (native changes):
+
+```bash
+pnpm --filter mobile exec expo prebuild --platform android --no-install
+pnpm --filter mobile exec expo run:android --device
+pnpm --filter mobile exec expo start --dev-client -c
+```
+
+Release build (Android):
+
+```bash
+cd apps/mobile/android
+./gradlew.bat clean
+./gradlew.bat assembleRelease -PreactNativeArchitectures=arm64-v8a
+```
+
+See full details in `apps/mobile/README.md`.

@@ -1,6 +1,6 @@
 packages:
   - apps/*
   - packages/*
-virtualStoreDir: .pnpm
-virtualStoreDirMaxLength: 40
+virtualStoreDir: .pn
+virtualStoreDirMaxLength: 24
 peersSuffixMaxLength: 64

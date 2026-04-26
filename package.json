@@ -21,7 +21,8 @@
     "db:status": "pnpm --filter @pineapple/backend db:status",
     "db:generate": "pnpm --filter @pineapple/backend db:generate",
     "db:migrate": "pnpm --filter @pineapple/backend db:migrate",
-    "db:studio": "pnpm --filter @pineapple/backend db:studio"
+    "db:studio": "pnpm --filter @pineapple/backend db:studio",
+    "dev:easy": "pnpm --filter @pineapple/backend dev:easy"
   },
   "devDependencies": {
     "turbo": "^2.5.8"

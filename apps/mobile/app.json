@@ -40,6 +40,13 @@
           "enableBackgroundRecording": false
         }
       ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to use the microphone for voice input.",
+          "speechRecognitionPermission": "Allow $(PRODUCT_NAME) to transcribe speech into text."
+        }
+      ],
       "expo-font",
       "expo-web-browser"
     ],

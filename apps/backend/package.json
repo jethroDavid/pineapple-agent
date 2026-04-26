@@ -18,7 +18,8 @@
     "db:status": "docker compose ps",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "dev:easy": "tsx src/dev/dev-easy.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",

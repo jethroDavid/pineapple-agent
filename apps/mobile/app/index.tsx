@@ -1,4 +1,9 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import {
+  ExpoSpeechRecognitionModule,
+  type ExpoSpeechRecognitionErrorCode,
+  useSpeechRecognitionEvent
+} from "expo-speech-recognition";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -40,7 +45,6 @@ import { useAudioBridgeStore } from "@/src/state/audio-bridge-store";
 const activeRequestStatuses = new Set([
   "queued",
   "processing",
-  "ready",
   "streaming"
 ]);
 const activePlaybackStates = new Set<AudioPlaybackState>([
@@ -49,12 +53,18 @@ const activePlaybackStates = new Set<AudioPlaybackState>([
   "paused"
 ]);
 const signalBars = Array.from({ length: 18 }, (_, index) => index);
+type VoiceCaptureState = "idle" | "listening" | "finalizing" | "error";
+interface TranscriptExchange {
+  prompt: string;
+  reply: string | null;
+}
 
 export default function AudioBridgeScreen() {
   const {
     prompt,
     requestId,
     status,
+    outputText,
     errorMessage,
     setPrompt,
     resetRun,
@@ -65,7 +75,17 @@ export default function AudioBridgeScreen() {
   const [isPlayerBusy, setIsPlayerBusy] = useState(false);
   const [playbackState, setPlaybackState] =
     useState<AudioPlaybackState>("idle");
+  const [voiceState, setVoiceState] = useState<VoiceCaptureState>("idle");
+  const [voicePreview, setVoicePreview] = useState("");
+  const [voiceHint, setVoiceHint] = useState<string | null>(null);
+  const [voiceDisabledReason, setVoiceDisabledReason] = useState<string | null>(null);
+  const [lastExchange, setLastExchange] = useState<TranscriptExchange | null>(null);
   const playedRequestIdRef = useRef<string | null>(null);
+  const sessionScrollRef = useRef<ScrollView | null>(null);
+  const micPressingRef = useRef(false);
+  const pendingVoiceSubmitRef = useRef(false);
+  const latestVoiceTranscriptRef = useRef("");
+  const finalVoiceTranscriptRef = useRef("");
   const pulse = useSharedValue(0);
   const wave = useSharedValue(0);
 
@@ -126,7 +146,90 @@ export default function AudioBridgeScreen() {
     );
   }, [setError, statusQuery.error]);
 
-  const isRequestActive = activeRequestStatuses.has(status);
+  useEffect(() => {
+    if (!outputText) {
+      return;
+    }
+
+    setLastExchange((current) => {
+      if (!current) {
+        return current;
+      }
+
+      if (current.reply === outputText) {
+        return current;
+      }
+
+      return {
+        ...current,
+        reply: outputText
+      };
+    });
+  }, [outputText]);
+
+  useEffect(() => {
+    if (voiceDisabledReason !== null) {
+      return;
+    }
+
+    if (ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
+      return;
+    }
+
+    setVoiceDisabledReason(
+      "Voice input is unavailable on this device. Type your prompt instead."
+    );
+  }, [voiceDisabledReason]);
+
+  useSpeechRecognitionEvent("start", () => {
+    setVoiceState("listening");
+    setVoiceHint(null);
+  });
+
+  useSpeechRecognitionEvent("result", (event) => {
+    const transcript = event.results[0]?.transcript?.trim() ?? "";
+
+    if (!transcript) {
+      return;
+    }
+
+    latestVoiceTranscriptRef.current = transcript;
+    setVoicePreview(transcript);
+
+    if (event.isFinal) {
+      finalVoiceTranscriptRef.current = transcript;
+    }
+  });
+
+  useSpeechRecognitionEvent("error", (event) => {
+    if (event.error === "aborted") {
+      return;
+    }
+
+    if (
+      event.error === "not-allowed" ||
+      event.error === "service-not-allowed" ||
+      event.error === "language-not-supported"
+    ) {
+      setVoiceDisabledReason(
+        "Microphone or speech permission is unavailable. Type your prompt instead."
+      );
+    }
+
+    setVoiceState("error");
+    setVoiceHint(getVoiceErrorHint(event.error));
+  });
+
+  useSpeechRecognitionEvent("end", () => {
+    void finalizeVoiceCapture();
+  });
+
+  const isAwaitingInitialPlayback =
+    status === "ready" &&
+    requestId !== null &&
+    playedRequestIdRef.current !== requestId;
+  const isRequestActive =
+    activeRequestStatuses.has(status) || isAwaitingInitialPlayback;
   const isPlaybackActive = activePlaybackStates.has(playbackState);
   const isGenerating =
     requestMutation.isPending || status === "queued" || status === "processing";
@@ -137,8 +240,20 @@ export default function AudioBridgeScreen() {
   const canSubmit = useMemo(() => {
     return prompt.trim().length > 0 && !requestMutation.isPending;
   }, [prompt, requestMutation.isPending]);
+  const isVoiceBusy = voiceState === "listening" || voiceState === "finalizing";
+  const isVoiceDisabledByFallback = voiceDisabledReason !== null;
+  const isVoiceBlockedByRun =
+    requestMutation.isPending ||
+    isRequestActive ||
+    isPlaybackActive ||
+    isPlayerBusy ||
+    isGenerating;
+  const canStartVoiceCapture =
+    !isVoiceBusy && !isVoiceDisabledByFallback && !isVoiceBlockedByRun;
+  const micControlDisabled =
+    isVoiceDisabledByFallback || (isVoiceBlockedByRun && !isVoiceBusy);
   const canPressPower =
-    isPlaybackActive || (!isRequestActive && canSubmit && !isPlayerBusy);
+    isPlaybackActive || (!isRequestActive && canSubmit && !isPlayerBusy && !isVoiceBusy);
   const visualActive = isGenerating || isStreaming;
   const statusLabel = getStatusLabel({
     isGenerating,
@@ -209,8 +324,8 @@ export default function AudioBridgeScreen() {
     };
   });
 
-  async function submitPrompt(): Promise<void> {
-    const trimmed = prompt.trim();
+  async function submitPromptText(text: string): Promise<void> {
+    const trimmed = text.trim();
 
     if (!trimmed || requestMutation.isPending) {
       return;
@@ -220,7 +335,111 @@ export default function AudioBridgeScreen() {
     setPlaybackState("idle");
     playedRequestIdRef.current = null;
     resetRun();
+    setLastExchange({
+      prompt: trimmed,
+      reply: null
+    });
     requestMutation.mutate(trimmed);
+  }
+
+  async function submitPrompt(): Promise<void> {
+    await submitPromptText(prompt);
+  }
+
+  async function beginVoiceCapture(): Promise<void> {
+    if (!canStartVoiceCapture) {
+      return;
+    }
+
+    micPressingRef.current = true;
+    pendingVoiceSubmitRef.current = false;
+    latestVoiceTranscriptRef.current = "";
+    finalVoiceTranscriptRef.current = "";
+    setVoicePreview("");
+    setVoiceHint(null);
+
+    if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
+      setVoiceDisabledReason(
+        "Voice input is unavailable on this device. Type your prompt instead."
+      );
+      setVoiceState("error");
+      return;
+    }
+
+    try {
+      const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!permission.granted) {
+        setVoiceDisabledReason(
+          "Microphone access is disabled. Type your prompt instead."
+        );
+        setVoiceHint("Microphone permission was denied.");
+        setVoiceState("error");
+        return;
+      }
+
+      if (!micPressingRef.current) {
+        return;
+      }
+
+      setVoiceState("listening");
+      ExpoSpeechRecognitionModule.start({
+        lang: getRecognitionLocale(),
+        interimResults: true,
+        maxAlternatives: 1,
+        continuous: false
+      });
+    } catch (error) {
+      setVoiceState("error");
+      setVoiceHint(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function endVoiceCapture(): Promise<void> {
+    micPressingRef.current = false;
+
+    if (voiceState !== "listening") {
+      return;
+    }
+
+    pendingVoiceSubmitRef.current = true;
+    setVoiceState("finalizing");
+    setVoiceHint("Transcribing...");
+
+    try {
+      ExpoSpeechRecognitionModule.stop();
+    } catch (error) {
+      pendingVoiceSubmitRef.current = false;
+      setVoiceState("error");
+      setVoiceHint(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function finalizeVoiceCapture(): Promise<void> {
+    micPressingRef.current = false;
+    const pendingSubmit = pendingVoiceSubmitRef.current;
+    pendingVoiceSubmitRef.current = false;
+    setVoiceState("idle");
+
+    if (!pendingSubmit) {
+      return;
+    }
+
+    const transcript =
+      finalVoiceTranscriptRef.current.trim() ||
+      latestVoiceTranscriptRef.current.trim();
+
+    latestVoiceTranscriptRef.current = "";
+    finalVoiceTranscriptRef.current = "";
+    setVoicePreview("");
+
+    if (!transcript) {
+      setVoiceHint("No speech detected. Hold to talk and try again.");
+      return;
+    }
+
+    setVoiceHint(null);
+    setPrompt(transcript);
+    await submitPromptText(transcript);
   }
 
   async function playAudio(nextRequestId: string): Promise<void> {
@@ -233,9 +452,11 @@ export default function AudioBridgeScreen() {
           title: "Assistant stream",
           artist: "Pineapple",
           onPlaybackFinished: () => {
-            void notifyAssistantPlaybackComplete(nextRequestId).catch((error) => {
-              setError(error instanceof Error ? error.message : String(error));
-            });
+            void notifyAssistantPlaybackComplete(nextRequestId)
+              .then(() => statusQuery.refetch())
+              .catch((error) => {
+                setError(error instanceof Error ? error.message : String(error));
+              });
           }
         }
       );
@@ -270,10 +491,7 @@ export default function AudioBridgeScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.keyboard}
       >
-        <ScrollView
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-        >
+        <View style={styles.content}>
           <View style={styles.header}>
             {/* <Text style={styles.kicker}>Pineapple</Text>
             <Text style={styles.title}>Run audio</Text> */}
@@ -290,6 +508,46 @@ export default function AudioBridgeScreen() {
               placeholderTextColor="#6f7b88"
               autoCapitalize="sentences"
             />
+            <View style={styles.voiceDock}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Hold to talk"
+                accessibilityHint="Press and hold to record your voice and release to send."
+                disabled={micControlDisabled}
+                onPressIn={() => {
+                  void beginVoiceCapture();
+                }}
+                onPressOut={() => {
+                  void endVoiceCapture();
+                }}
+                style={[
+                  styles.voiceChip,
+                  voiceState === "listening" && styles.voiceChipActive,
+                  micControlDisabled && styles.voiceChipDisabled
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name={voiceState === "listening" ? "microphone" : "microphone-outline"}
+                  color={voiceState === "listening" ? "#041314" : "#a7b8b2"}
+                  size={18}
+                />
+                <Text
+                  style={[
+                    styles.voiceChipText,
+                    voiceState === "listening" && styles.voiceChipTextActive
+                  ]}
+                >
+                  {voiceState === "listening"
+                    ? "Listening"
+                    : voiceState === "finalizing"
+                      ? "Transcribing"
+                      : "Hold to talk"}
+                </Text>
+              </Pressable>
+              <Text style={styles.voiceHintText} numberOfLines={1}>
+                {voiceDisabledReason ?? voiceHint ?? voicePreview}
+              </Text>
+            </View>
           </View>
 
           <View style={styles.stage}>
@@ -343,7 +601,36 @@ export default function AudioBridgeScreen() {
           </View>
 
           {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
-        </ScrollView>
+          <View style={styles.transcriptPanel}>
+            <View style={styles.transcriptHeader}>
+              <Text style={styles.transcriptTitle}>Session view</Text>
+              <Text style={styles.transcriptBadge}>Temporary</Text>
+            </View>
+            <ScrollView
+              ref={sessionScrollRef}
+              contentContainerStyle={styles.transcriptScrollContent}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={false}
+              style={styles.transcriptScroll}
+            >
+              <View style={styles.transcriptCard}>
+                <Text style={styles.transcriptTag}>$ you</Text>
+                <Text style={styles.transcriptText}>
+                  {lastExchange?.prompt ?? "Your latest prompt appears here."}
+                </Text>
+              </View>
+              <View style={styles.transcriptCard}>
+                <Text style={styles.transcriptTag}>{">"} agent</Text>
+                <Text style={styles.transcriptText}>
+                  {lastExchange?.reply ??
+                    (lastExchange
+                      ? "Waiting for response..."
+                      : "Agent response appears here for this session only.")}
+                </Text>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -406,6 +693,28 @@ function getStatusLabel(input: {
   return "Ready";
 }
 
+function getVoiceErrorHint(code: ExpoSpeechRecognitionErrorCode): string {
+  if (code === "no-speech" || code === "speech-timeout") {
+    return "No speech detected. Hold to talk and try again.";
+  }
+
+  if (code === "not-allowed" || code === "service-not-allowed") {
+    return "Voice permission is unavailable. Type your prompt instead.";
+  }
+
+  return "Voice capture failed. Type your prompt or try again.";
+}
+
+function getRecognitionLocale(): string {
+  const locale = Intl.DateTimeFormat().resolvedOptions().locale;
+
+  if (typeof locale === "string" && locale.trim().length > 0) {
+    return locale;
+  }
+
+  return "en-US";
+}
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -415,10 +724,10 @@ const styles = StyleSheet.create({
     flex: 1
   },
   content: {
-    flexGrow: 1,
+    flex: 1,
     justifyContent: "space-between",
     paddingHorizontal: 22,
-    paddingBottom: 28,
+    paddingBottom: 20,
     paddingTop: 22
   },
   header: {
@@ -451,6 +760,46 @@ const styles = StyleSheet.create({
     lineHeight: 29,
     padding: 0,
     textAlignVertical: "top"
+  },
+  voiceDock: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 10
+  },
+  voiceChip: {
+    alignItems: "center",
+    backgroundColor: "#102320",
+    borderColor: "#35514a",
+    borderRadius: 24,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 8,
+    minHeight: 42,
+    paddingHorizontal: 14
+  },
+  voiceChipActive: {
+    backgroundColor: "#7fffd2",
+    borderColor: "#d4fff2"
+  },
+  voiceChipDisabled: {
+    opacity: 0.4
+  },
+  voiceChipText: {
+    color: "#a7b8b2",
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+    textTransform: "uppercase"
+  },
+  voiceChipTextActive: {
+    color: "#041314"
+  },
+  voiceHintText: {
+    color: "#78928a",
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600"
   },
   stage: {
     alignItems: "center",
@@ -537,6 +886,74 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     lineHeight: 20,
-    marginTop: 18
+    marginTop: 10
+  },
+  transcriptPanel: {
+    backgroundColor: "#030b0a",
+    borderColor: "#22332f",
+    borderRadius: 14,
+    borderWidth: 1,
+    flexBasis: "26%",
+    justifyContent: "space-between",
+    marginTop: 10,
+    minHeight: 170,
+    paddingHorizontal: 12,
+    paddingVertical: 10
+  },
+  transcriptScroll: {
+    flex: 1
+  },
+  transcriptScrollContent: {
+    gap: 8,
+    paddingBottom: 2
+  },
+  transcriptHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8
+  },
+  transcriptTitle: {
+    color: "#8eb5aa",
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+    textTransform: "uppercase"
+  },
+  transcriptBadge: {
+    color: "#6f7b88",
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase"
+  },
+  transcriptCard: {
+    backgroundColor: "#071211",
+    borderColor: "#253c38",
+    borderRadius: 10,
+    borderWidth: 1,
+    justifyContent: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  transcriptTag: {
+    color: "#7fffd2",
+    fontFamily: Platform.select({
+      android: "monospace",
+      ios: "Menlo",
+      default: "monospace"
+    }),
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 4
+  },
+  transcriptText: {
+    color: "#d8ece6",
+    fontFamily: Platform.select({
+      android: "monospace",
+      ios: "Menlo",
+      default: "monospace"
+    }),
+    fontSize: 13,
+    lineHeight: 18
   }
 });

@@ -5,3 +5,8 @@ dist
 coverage
 .data
 apps/backend/.spotify-token.json
+
+# local build/cache noise
+.gradle-user/
+.tmp/
+.tmp-*.log

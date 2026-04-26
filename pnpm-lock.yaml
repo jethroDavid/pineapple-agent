@@ -103,6 +103,9 @@ importers:
       expo-router:
         specifier: ~55.0.13
         version: 55.0.13(e972cfebf440e58b3711e41c623e7f3d)
+      expo-speech-recognition:
+        specifier: ^3.1.3
+        version: 3.1.3(ad2dd56ca24e13443d7a82f866f34588)
       expo-splash-screen:
         specifier: ~55.0.19
         version: 55.0.19(expo@55.0.17)(typescript@5.9.3)
@@ -2820,6 +2823,13 @@ packages:
   expo-server@55.0.8:
     resolution: {integrity: sha512-AoV5TKuO4biSzrhe/OVLyInfTT0pV9/OOc/g/oVq5vmCjL8SaSYTkES8PLt+67Tm7VqX+Dn0+kSx1nQcjEKaPw==}
     engines: {node: '>=20.16.0'}
+
+  expo-speech-recognition@3.1.3:
+    resolution: {integrity: sha512-vluXqggfY2AJcazYITvnV6YSE2rVe5SId5TpdjMC/m6JPUgHCOODrcHJtAQF6OUYl4f2T7oZSceGw6fJCC86Xw==}
+    peerDependencies:
+      expo: '*'
+      react: '*'
+      react-native: '*'
 
   expo-splash-screen@55.0.19:
     resolution: {integrity: sha512-l8BWI/inLJW46Ojz5NgwvaM8LftrdXeFfZBUXhAoZxg44Qo2xKY76s0S1h3WIxWXT4sRKwK8YQzGr4k+zHubxQ==}
@@ -7463,6 +7473,12 @@ snapshots:
       - supports-color
 
   expo-server@55.0.8: {}
+
+  expo-speech-recognition@3.1.3(ad2dd56ca24e13443d7a82f866f34588):
+    dependencies:
+      expo: 55.0.17(dfa3866bcc35ef2f6842add9ef6295b4)
+      react: 19.2.0
+      react-native: 0.83.6(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0)
 
   expo-splash-screen@55.0.19(expo@55.0.17)(typescript@5.9.3):
     dependencies:

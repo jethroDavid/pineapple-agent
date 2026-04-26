@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { loadEnvFile } from "./load-env.js";
+import { defaultBackendPort } from "./network-defaults.js";
 
 loadEnvFile();
 
@@ -78,7 +79,7 @@ const envSchema = z.object({
   LOG_LEVEL: optionalLogLevel,
   TRACE_CONSOLE: optionalBoolean,
   HOST: z.string().default("0.0.0.0"),
-  PORT: z.coerce.number().int().positive().default(3000),
+  PORT: z.coerce.number().int().positive().default(defaultBackendPort),
   DATABASE_URL: optionalString,
   OPENAI_API_KEY: optionalString,
   OPENAI_MODEL: optionalString,
@@ -100,6 +101,7 @@ const envSchema = z.object({
   ASSISTANT_AUDIO_BRIDGE_OPENAI_TTS_INSTRUCTIONS: optionalString,
   ASSISTANT_AUDIO_BRIDGE_SPOTIFY_CLIENT_ID: optionalString,
   ASSISTANT_AUDIO_BRIDGE_SPOTIFY_TOKEN_FILE: optionalString,
+  ASSISTANT_AUDIO_BRIDGE_SPOTIFY_REDIRECT_URI: optionalString,
   ASSISTANT_AUDIO_BRIDGE_SPOTIFY_DEVICE: optionalString,
   ASSISTANT_AUDIO_BRIDGE_SPOTIFY_DEVICE_CACHE_FILE: optionalString,
   ASSISTANT_AUDIO_BRIDGE_AUDIO_ARTIFACT_DIR: optionalString,

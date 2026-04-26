@@ -1,4 +1,8 @@
-import { promises as fs } from "node:fs";
+import {
+  type AssistantAudioBridgeSpotifyTokens,
+  readSpotifyTokensFile,
+  writeSpotifyTokensFile
+} from "./assistant-audio-bridge-spotify-auth.js";
 
 const spotifyAccountsBase = "https://accounts.spotify.com";
 const spotifyRequestTimeoutMs = 12_000;
@@ -7,6 +11,7 @@ export interface AssistantAudioBridgeSpotifyClientConfig {
   clientId: string;
   tokenFilePath: string;
   defaultDeviceHint?: string;
+  reauthorize?: () => Promise<void>;
 }
 
 export interface AssistantAudioBridgeSpotifyDevice {
@@ -14,14 +19,6 @@ export interface AssistantAudioBridgeSpotifyDevice {
   name: string;
   isActive: boolean;
   type: string | null;
-}
-
-interface AssistantAudioBridgeSpotifyTokens {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: number;
-  tokenType: string;
-  scope?: string;
 }
 
 interface AssistantAudioBridgeSpotifyTrack {
@@ -38,8 +35,11 @@ interface AssistantAudioBridgePlaybackState {
   };
 }
 
+class SpotifyTokenRefreshAuthError extends Error {}
+
 export class AssistantAudioBridgeSpotifyClient {
   #cachedTokens: AssistantAudioBridgeSpotifyTokens | null = null;
+  #reauthorizationInFlight: Promise<void> | null = null;
 
   constructor(private readonly config: AssistantAudioBridgeSpotifyClientConfig) {}
 
@@ -101,16 +101,37 @@ export class AssistantAudioBridgeSpotifyClient {
     const targetDeviceId =
       currentPlayback?.device?.id ?? (await this.resolveDeviceId(deviceHint));
 
-    await this.request("PUT", "/me/player/pause", {
-      query: {
-        device_id: targetDeviceId
-      },
-      timeoutMs: 4_000
-    }).catch(async () => {
+    let pauseAttemptError: unknown = null;
+
+    try {
       await this.request("PUT", "/me/player/pause", {
+        query: {
+          device_id: targetDeviceId
+        },
         timeoutMs: 4_000
       });
-    });
+    } catch (error) {
+      pauseAttemptError = error;
+      try {
+        await this.request("PUT", "/me/player/pause", {
+          timeoutMs: 4_000
+        });
+        pauseAttemptError = null;
+      } catch (fallbackError) {
+        pauseAttemptError = fallbackError;
+      }
+    }
+
+    if (pauseAttemptError !== null) {
+      if (isSpotifyRestrictionViolationError(pauseAttemptError)) {
+        return {
+          paused: false,
+          targetDeviceId
+        };
+      }
+
+      throw pauseAttemptError;
+    }
 
     let paused = await this.waitUntilPlaybackStops(timeoutMs, pollIntervalMs);
 
@@ -232,31 +253,14 @@ export class AssistantAudioBridgeSpotifyClient {
     })) as AssistantAudioBridgePlaybackState | null;
   }
 
-  private async getTokens(): Promise<AssistantAudioBridgeSpotifyTokens> {
-    if (this.#cachedTokens) {
+  private async getTokens(options: { forceReload?: boolean } = {}): Promise<AssistantAudioBridgeSpotifyTokens> {
+    if (!options.forceReload && this.#cachedTokens) {
       return this.#cachedTokens;
     }
 
-    const raw = await fs.readFile(this.config.tokenFilePath, "utf8");
-    const tokens = JSON.parse(raw) as Partial<AssistantAudioBridgeSpotifyTokens>;
-
-    if (
-      !tokens.accessToken ||
-      !tokens.refreshToken ||
-      !tokens.expiresAt ||
-      !tokens.tokenType
-    ) {
-      throw new Error("Spotify token file is missing required fields.");
-    }
-
-    this.#cachedTokens = {
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      expiresAt: tokens.expiresAt,
-      tokenType: tokens.tokenType,
-      scope: tokens.scope
-    };
-    return this.#cachedTokens;
+    const tokens = await readSpotifyTokensFile(this.config.tokenFilePath);
+    this.#cachedTokens = tokens;
+    return tokens;
   }
 
   private isExpiringSoon(tokens: AssistantAudioBridgeSpotifyTokens): boolean {
@@ -270,17 +274,65 @@ export class AssistantAudioBridgeSpotifyClient {
       return tokens.accessToken;
     }
 
-    const refreshed = await this.refreshTokens(tokens);
-    await fs.writeFile(
-      this.config.tokenFilePath,
-      `${JSON.stringify(refreshed, null, 2)}\n`,
-      {
-        encoding: "utf8",
-        mode: 0o600
+    try {
+      const refreshed = await this.refreshTokens(tokens);
+      await this.persistTokens(refreshed);
+      return refreshed.accessToken;
+    } catch (error) {
+      if (!(error instanceof SpotifyTokenRefreshAuthError)) {
+        throw error;
       }
-    );
-    this.#cachedTokens = refreshed;
-    return refreshed.accessToken;
+
+      await this.reauthorizeAfterRefreshFailure(error);
+      const reloaded = await this.getTokens({
+        forceReload: true
+      });
+
+      if (!this.isExpiringSoon(reloaded)) {
+        return reloaded.accessToken;
+      }
+
+      const retried = await this.refreshTokens(reloaded);
+      await this.persistTokens(retried);
+      return retried.accessToken;
+    }
+  }
+
+  private async persistTokens(tokens: AssistantAudioBridgeSpotifyTokens): Promise<void> {
+    await writeSpotifyTokensFile(this.config.tokenFilePath, tokens);
+    this.#cachedTokens = tokens;
+  }
+
+  private async reauthorizeAfterRefreshFailure(cause: Error): Promise<void> {
+    if (!this.config.reauthorize) {
+      throw cause;
+    }
+
+    if (this.#reauthorizationInFlight !== null) {
+      await this.#reauthorizationInFlight;
+      return;
+    }
+
+    this.#reauthorizationInFlight = (async () => {
+      try {
+        await this.config.reauthorize?.();
+      } catch (error) {
+        throw new Error(
+          "Spotify reauthentication failed. Rerun `pnpm dev:easy` and complete Spotify sign-in.",
+          {
+            cause: error
+          }
+        );
+      } finally {
+        this.#cachedTokens = null;
+      }
+    })();
+
+    try {
+      await this.#reauthorizationInFlight;
+    } finally {
+      this.#reauthorizationInFlight = null;
+    }
   }
 
   private async refreshTokens(
@@ -328,6 +380,11 @@ export class AssistantAudioBridgeSpotifyClient {
     if (!response.ok || !json.access_token || !json.token_type || !json.expires_in) {
       const message =
         json.error_description ?? json.error ?? "Spotify token refresh failed.";
+
+      if (isSpotifyRefreshAuthFailure(response.status, json.error)) {
+        throw new SpotifyTokenRefreshAuthError(message);
+      }
+
       throw new Error(message);
     }
 
@@ -498,4 +555,20 @@ export class AssistantAudioBridgeSpotifyClient {
       setTimeout(resolve, ms);
     });
   }
+}
+
+function isSpotifyRefreshAuthFailure(statusCode: number, errorCode: string | undefined): boolean {
+  if (errorCode === "invalid_grant" || errorCode === "invalid_client") {
+    return true;
+  }
+
+  return statusCode === 401;
+}
+
+function isSpotifyRestrictionViolationError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return /restriction violated/i.test(error.message);
 }

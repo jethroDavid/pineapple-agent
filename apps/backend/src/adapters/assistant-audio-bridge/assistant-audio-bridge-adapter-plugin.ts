@@ -1,24 +1,20 @@
-import { resolve } from "node:path";
-
 import { env } from "../../config/env.js";
 import { OpenAiTtsClient } from "../../shared/openai/openai-tts-client.js";
 import type { AdapterPlugin } from "../adapter-plugin.js";
 import { createAssistantAudioBridgeAdapter } from "./assistant-audio-bridge-adapter.js";
+import {
+  reauthorizeSpotifyTokens
+} from "./assistant-audio-bridge-spotify-auth.js";
+import {
+  resolveDefaultAudioArtifactDir,
+  resolveDefaultSpotifyDeviceCachePath,
+  resolveDefaultSpotifyTokenPath
+} from "./assistant-audio-bridge-paths.js";
 import { AssistantAudioBridgeSpotifyClient } from "./assistant-audio-bridge-spotify-client.js";
 
-const defaultAssistantAudioBridgeDataDir = resolve(
-  process.cwd(),
-  ".data/assistant-audio-bridge"
-);
-const defaultSpotifyTokenPath = resolve(
-  defaultAssistantAudioBridgeDataDir,
-  "spotify-token.json"
-);
-const defaultSpotifyDeviceCachePath = resolve(
-  defaultAssistantAudioBridgeDataDir,
-  "spotify-devices.json"
-);
-const defaultAudioArtifactDir = resolve(defaultAssistantAudioBridgeDataDir, "audio");
+const defaultSpotifyTokenPath = resolveDefaultSpotifyTokenPath();
+const defaultSpotifyDeviceCachePath = resolveDefaultSpotifyDeviceCachePath();
+const defaultAudioArtifactDir = resolveDefaultAudioArtifactDir();
 
 export const assistantAudioBridgeAdapterPlugin: AdapterPlugin = {
   id: "assistant_audio_bridge",
@@ -53,9 +49,15 @@ function createSpotifyClient(): AssistantAudioBridgeSpotifyClient | null {
 
   return new AssistantAudioBridgeSpotifyClient({
     clientId: spotifyClientId,
-    tokenFilePath:
-      env.ASSISTANT_AUDIO_BRIDGE_SPOTIFY_TOKEN_FILE ?? defaultSpotifyTokenPath,
-    defaultDeviceHint: env.ASSISTANT_AUDIO_BRIDGE_SPOTIFY_DEVICE
+    tokenFilePath: env.ASSISTANT_AUDIO_BRIDGE_SPOTIFY_TOKEN_FILE ?? defaultSpotifyTokenPath,
+    defaultDeviceHint: env.ASSISTANT_AUDIO_BRIDGE_SPOTIFY_DEVICE,
+    reauthorize: async () => {
+      await reauthorizeSpotifyTokens({
+        clientId: spotifyClientId,
+        tokenFilePath: env.ASSISTANT_AUDIO_BRIDGE_SPOTIFY_TOKEN_FILE ?? defaultSpotifyTokenPath,
+        redirectUri: env.ASSISTANT_AUDIO_BRIDGE_SPOTIFY_REDIRECT_URI
+      });
+    }
   });
 }
 

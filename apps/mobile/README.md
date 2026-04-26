@@ -8,49 +8,90 @@ Expo development-build app for assistant audio streaming.
 pnpm install
 ```
 
-Set the backend base URL before starting Expo:
+Set backend URL before starting the app:
 
-```bash
+```powershell
 # PowerShell
 $env:EXPO_PUBLIC_API_BASE_URL="http://<your-local-ip>:3000"
 ```
 
-Use the right host per runtime:
-- Android emulator: `http://10.0.2.2:3000`
-- iOS simulator: `http://localhost:3000`
-- Physical device: `http://<your-local-ip>:3000`
-
-## Run (Simplest)
-
 ```bash
-pnpm --filter mobile exec expo start -c
+# bash/zsh
+export EXPO_PUBLIC_API_BASE_URL="http://<your-local-ip>:3000"
 ```
 
-Open the installed Android development build. Expo Go is not the target for lock-screen playback.
+Host guide:
+- Android emulator: `http://10.0.2.2:3000`
+- iOS simulator: `http://localhost:3000`
+- Physical Android device: `http://<your-local-ip>:3000`
 
-## Run (Native Android Build)
+If you run `pnpm dev:easy` at repo root, the mobile base URL is auto-synced.
 
-Use this only when native Android code/dependencies changed:
+Expo Go is not used for this app; use a development build or release APK.
+
+## Track Changes Before You Build
+
+```bash
+git status --short
+```
+
+Use this before and after each build/rebuild so you can quickly spot:
+- source changes you intended
+- generated files you should ignore
+- build output you should not commit
+
+## Development Workflow
+
+For JS/TS-only changes (most edits), do not rebuild native:
+
+```bash
+pnpm --filter mobile exec expo start --dev-client
+```
+
+If Metro cache is stale:
+
+```bash
+pnpm --filter mobile exec expo start --dev-client -c
+```
+
+## Rebuild For Development
+
+Rebuild the Android development app when native config/dependencies change:
+- `app.json` plugin/native settings
+- `package.json` native module changes
+- anything under `apps/mobile/android` (if committed)
 
 ```bash
 pnpm install --config.confirmModulesPurge=false
 pnpm --filter mobile exec expo prebuild --platform android --no-install
-pnpm --filter mobile exec expo run:android
-pnpm --filter mobile exec expo start -c
+pnpm --filter mobile exec expo run:android --device
+pnpm --filter mobile exec expo start --dev-client -c
 ```
 
-## Why Multiple Commands?
+## Build For Release (Android)
 
-- `pnpm install`: dependency install/update
-- `expo start -c`: Metro bundler with cache reset
-- `expo prebuild`: applies native config plugins such as `expo-audio`
-- `expo run:android`: native Android build/install step (not needed for every JS-only change)
+From repo root:
 
-## Flow
+```bash
+pnpm install --config.confirmModulesPurge=false
+pnpm --filter mobile exec expo prebuild --platform android --no-install
+cd apps/mobile/android
+./gradlew.bat clean
+./gradlew.bat assembleRelease -PreactNativeArchitectures=arm64-v8a
+```
+
+Release APK output:
+- `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`
+
+Install to device:
+
+```bash
+adb install -r apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+```
+
+## App Flow
 
 1. Enter prompt text.
 2. Tap the power button.
 3. The app polls until TTS is ready.
 4. Playback starts automatically from `GET /adapters/assistant-audio-bridge/requests/:requestId/audio`.
-
-Audio uses `expo-audio` with Android background playback enabled. The Android native project must include `AudioControlsService` and the foreground media playback permission for screen-lock playback.
