@@ -2,6 +2,7 @@ import type { AppAdapter, AppAdapterInitContext } from "../../adapters/app-adapt
 import { createAgentRuntime, type AppAgentRuntime } from "../../agents/agent-runtime.js";
 import { createAppServices } from "./services.js";
 import { env } from "../../config/env.js";
+import { resolveProjectRoot } from "../../config/project-root.js";
 import { PineappleDaemon } from "../../execution/queue/pineapple-daemon.js";
 import {
   createAppExecutionService,
@@ -31,12 +32,19 @@ export function createAppRuntime(): AppRuntime | null {
 
   const adapters = services.adapters;
   const daemon = new PineappleDaemon(async () => undefined);
+  const projectRoot = resolveProjectRoot({
+    configuredProjectRoot: env.PINEAPPLE_PROJECT_ROOT
+  });
+  trace("startup", "resolved project root", {
+    projectRoot
+  });
   const agentRuntime =
     env.OPENAI_API_KEY && env.OPENAI_MODEL
       ? createAgentRuntime({
           definitionsDir: env.PINEAPPLE_AGENTS_DIR ?? ".pineapple/agents",
           defaultModel: env.OPENAI_MODEL,
           codexModel: env.CODEX_MODEL ?? undefined,
+          projectRoot,
           threadStore: services.threadStore,
           agentThreadStore: services.agentThreadStore,
           specialistSessionStore: services.specialistSessionStore,

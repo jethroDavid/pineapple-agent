@@ -84,6 +84,7 @@ const envSchema = z.object({
   OPENAI_API_KEY: optionalString,
   OPENAI_MODEL: optionalString,
   CODEX_MODEL: optionalString,
+  PINEAPPLE_PROJECT_ROOT: optionalString,
   PINEAPPLE_AGENTS_DIR: optionalString,
   EXECUTION_TURN_TIMEOUT_MS: z.coerce
     .number()

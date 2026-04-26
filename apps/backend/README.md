@@ -31,6 +31,7 @@ pnpm dev:easy
 To enable the daemon-backed trigger endpoint, set both `OPENAI_API_KEY` and `OPENAI_MODEL` in `.env`.
 Set `RECOVERY_ENABLED=false` during local testing if you want to skip replaying previously active runs on startup.
 Set `EXECUTION_TURN_TIMEOUT_MS` to cap a single agent turn runtime (default `180000`) so one hung turn cannot block the daemon queue indefinitely.
+Set `PINEAPPLE_PROJECT_ROOT` to control the default repository workdir for agent MCP servers such as Codex. When unset, Pineapple uses the nearest workspace root it can find.
 
 To enable OpenAI web search for an agent, add a hosted tool in that agent manifest:
 
