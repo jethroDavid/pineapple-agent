@@ -8,7 +8,7 @@ import { queryClient } from "@/src/providers/query-client";
 export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <Stack>
         <Stack.Screen
           name="index"

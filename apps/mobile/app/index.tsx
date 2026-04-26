@@ -41,6 +41,7 @@ import {
   stopAudioPlayback
 } from "@/src/lib/audio-player";
 import { useAudioBridgeStore } from "@/src/state/audio-bridge-store";
+import { theme } from "@/src/theme";
 
 const activeRequestStatuses = new Set([
   "queued",
@@ -255,6 +256,9 @@ export default function AudioBridgeScreen() {
   const canPressPower =
     isPlaybackActive || (!isRequestActive && canSubmit && !isPlayerBusy && !isVoiceBusy);
   const visualActive = isGenerating || isStreaming;
+  const powerButtonContentColor = visualActive
+    ? theme.colors.surface
+    : theme.colors.onAccent;
   const statusLabel = getStatusLabel({
     isGenerating,
     isPlayerBusy,
@@ -505,8 +509,9 @@ export default function AudioBridgeScreen() {
               multiline
               editable={!isGenerating && !isPlayerBusy}
               placeholder="Ask for a coaching burst, news brief, or story beat."
-              placeholderTextColor="#6f7b88"
+              placeholderTextColor={theme.colors.textSoft}
               autoCapitalize="sentences"
+              selectionColor={theme.colors.primary}
             />
             <View style={styles.voiceDock}>
               <Pressable
@@ -528,7 +533,11 @@ export default function AudioBridgeScreen() {
               >
                 <MaterialCommunityIcons
                   name={voiceState === "listening" ? "microphone" : "microphone-outline"}
-                  color={voiceState === "listening" ? "#041314" : "#a7b8b2"}
+                  color={
+                    voiceState === "listening"
+                      ? theme.colors.onAccent
+                      : theme.colors.textMuted
+                  }
                   size={18}
                 />
                 <Text
@@ -567,11 +576,11 @@ export default function AudioBridgeScreen() {
               ]}
             >
               {requestMutation.isPending || isPlayerBusy ? (
-                <ActivityIndicator color="#041314" size="large" />
+                <ActivityIndicator color={powerButtonContentColor} size="large" />
               ) : (
                 <MaterialCommunityIcons
                   name={isPlaybackActive ? "stop" : "send"}
-                  color="#041314"
+                  color={powerButtonContentColor}
                   size={isPlaybackActive ? 50 : 48}
                 />
               )}
@@ -614,13 +623,17 @@ export default function AudioBridgeScreen() {
               style={styles.transcriptScroll}
             >
               <View style={styles.transcriptCard}>
-                <Text style={styles.transcriptTag}>$ you</Text>
+                <Text style={[styles.transcriptTag, styles.transcriptTagPrompt]}>
+                  $ you
+                </Text>
                 <Text style={styles.transcriptText}>
                   {lastExchange?.prompt ?? "Your latest prompt appears here."}
                 </Text>
               </View>
               <View style={styles.transcriptCard}>
-                <Text style={styles.transcriptTag}>{">"} agent</Text>
+                <Text style={[styles.transcriptTag, styles.transcriptTagReply]}>
+                  {">"} agent
+                </Text>
                 <Text style={styles.transcriptText}>
                   {lastExchange?.reply ??
                     (lastExchange
@@ -642,6 +655,7 @@ function SignalBar(props: {
   phase: SharedValue<number>;
   streaming: boolean;
 }) {
+  const tone = theme.signalTones[props.index % theme.signalTones.length];
   const animatedStyle = useAnimatedStyle(() => {
     const offset = props.index * 0.58;
     const waveHeight = Math.abs(
@@ -661,7 +675,11 @@ function SignalBar(props: {
     };
   });
 
-  return <Animated.View style={[styles.signalBar, animatedStyle]} />;
+  return (
+    <Animated.View
+      style={[styles.signalBar, { backgroundColor: tone }, animatedStyle]}
+    />
+  );
 }
 
 function getStatusLabel(input: {
@@ -718,7 +736,7 @@ function getRecognitionLocale(): string {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#07100f"
+    backgroundColor: theme.colors.background
   },
   keyboard: {
     flex: 1
@@ -734,27 +752,27 @@ const styles = StyleSheet.create({
     gap: 3
   },
   kicker: {
-    color: "#7fffd2",
+    color: theme.colors.primary,
     fontSize: 13,
     fontWeight: "700",
     letterSpacing: 0,
     textTransform: "uppercase"
   },
   title: {
-    color: "#f3fbf8",
+    color: theme.colors.text,
     fontSize: 42,
     fontWeight: "800",
     letterSpacing: 0
   },
   promptSurface: {
-    borderBottomColor: "#243632",
+    borderBottomColor: theme.colors.borderStrong,
     borderBottomWidth: 1,
     paddingBottom: 12,
     paddingTop: 18
   },
   input: {
     minHeight: 116,
-    color: "#eef7f4",
+    color: theme.colors.text,
     fontSize: 21,
     fontWeight: "600",
     lineHeight: 29,
@@ -769,8 +787,8 @@ const styles = StyleSheet.create({
   },
   voiceChip: {
     alignItems: "center",
-    backgroundColor: "#102320",
-    borderColor: "#35514a",
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.primaryBorder,
     borderRadius: 24,
     borderWidth: 1,
     flexDirection: "row",
@@ -779,24 +797,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14
   },
   voiceChipActive: {
-    backgroundColor: "#7fffd2",
-    borderColor: "#d4fff2"
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary
   },
   voiceChipDisabled: {
     opacity: 0.4
   },
   voiceChipText: {
-    color: "#a7b8b2",
+    color: theme.colors.textMuted,
     fontSize: 13,
     fontWeight: "700",
     letterSpacing: 0.2,
     textTransform: "uppercase"
   },
   voiceChipTextActive: {
-    color: "#041314"
+    color: theme.colors.onAccent
   },
   voiceHintText: {
-    color: "#78928a",
+    color: theme.colors.textSoft,
     flex: 1,
     fontSize: 12,
     fontWeight: "600"
@@ -811,7 +829,7 @@ const styles = StyleSheet.create({
     width: 210,
     height: 210,
     borderRadius: 105,
-    borderColor: "rgba(127, 255, 210, 0.34)",
+    borderColor: theme.colors.accentBorder,
     borderWidth: 2
   },
   innerRing: {
@@ -819,17 +837,17 @@ const styles = StyleSheet.create({
     width: 162,
     height: 162,
     borderRadius: 81,
-    backgroundColor: "rgba(127, 255, 210, 0.1)"
+    backgroundColor: theme.colors.secondarySoft
   },
   powerButton: {
     alignItems: "center",
-    backgroundColor: "#7fffd2",
-    borderColor: "#d4fff2",
+    backgroundColor: theme.colors.secondary,
+    borderColor: theme.colors.secondaryBorder,
     borderRadius: 66,
     borderWidth: 1,
     height: 132,
     justifyContent: "center",
-    shadowColor: "#7fffd2",
+    shadowColor: theme.colors.secondary,
     shadowOffset: {
       width: 0,
       height: 14
@@ -839,8 +857,9 @@ const styles = StyleSheet.create({
     width: 132
   },
   powerButtonActive: {
-    backgroundColor: "#a8f4ff",
-    shadowColor: "#a8f4ff"
+    backgroundColor: theme.colors.accent,
+    borderColor: theme.colors.accentBorder,
+    shadowColor: theme.colors.accent
   },
   powerButtonDisabled: {
     opacity: 0.55
@@ -856,7 +875,7 @@ const styles = StyleSheet.create({
     width: 5,
     height: 42,
     borderRadius: 3,
-    backgroundColor: "#8fffe0"
+    backgroundColor: theme.colors.primary
   },
   statusRow: {
     alignItems: "center",
@@ -871,26 +890,26 @@ const styles = StyleSheet.create({
     width: 10
   },
   statusDotActive: {
-    backgroundColor: "#7fffd2"
+    backgroundColor: theme.colors.success
   },
   statusDotIdle: {
-    backgroundColor: "#65736f"
+    backgroundColor: theme.colors.borderStrong
   },
   statusText: {
-    color: "#c8d6d1",
+    color: theme.colors.text,
     fontSize: 15,
     fontWeight: "700"
   },
   error: {
-    color: "#ff9a9a",
+    color: theme.colors.danger,
     fontSize: 14,
     fontWeight: "700",
     lineHeight: 20,
     marginTop: 10
   },
   transcriptPanel: {
-    backgroundColor: "#030b0a",
-    borderColor: "#22332f",
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
     borderRadius: 14,
     borderWidth: 1,
     flexBasis: "26%",
@@ -914,21 +933,21 @@ const styles = StyleSheet.create({
     marginBottom: 8
   },
   transcriptTitle: {
-    color: "#8eb5aa",
+    color: theme.colors.textMuted,
     fontSize: 12,
     fontWeight: "700",
     letterSpacing: 0.4,
     textTransform: "uppercase"
   },
   transcriptBadge: {
-    color: "#6f7b88",
+    color: theme.colors.accent,
     fontSize: 11,
     fontWeight: "700",
     textTransform: "uppercase"
   },
   transcriptCard: {
-    backgroundColor: "#071211",
-    borderColor: "#253c38",
+    backgroundColor: theme.colors.surfaceMuted,
+    borderColor: theme.colors.border,
     borderRadius: 10,
     borderWidth: 1,
     justifyContent: "center",
@@ -936,7 +955,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8
   },
   transcriptTag: {
-    color: "#7fffd2",
     fontFamily: Platform.select({
       android: "monospace",
       ios: "Menlo",
@@ -946,8 +964,14 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginBottom: 4
   },
+  transcriptTagPrompt: {
+    color: theme.colors.primary
+  },
+  transcriptTagReply: {
+    color: theme.colors.secondary
+  },
   transcriptText: {
-    color: "#d8ece6",
+    color: theme.colors.text,
     fontFamily: Platform.select({
       android: "monospace",
       ios: "Menlo",

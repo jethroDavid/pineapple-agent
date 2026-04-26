@@ -48,6 +48,18 @@ export function createFakeExecutionService(options: {
     canResolveDecisions() {
       return options.decisionResult !== undefined;
     },
+    listAgents() {
+      return createFakeAgentSummaries();
+    },
+    getAgentSummary(agentId: string) {
+      return createFakeAgentSummaries().find((agent) => agent.id === agentId) ?? null;
+    },
+    hasAgent(agentId: string) {
+      return createFakeAgentSummaries().some((agent) => agent.id === agentId);
+    },
+    getEntrypointAgentId() {
+      return "root_manager";
+    },
     async submitTrigger() {
       if (options.triggerError) {
         throw options.triggerError;
@@ -130,7 +142,13 @@ export function createFakeAgentRuntime() {
       return "root_manager";
     },
     listAgents() {
-      return [];
+      return createFakeAgentSummaries();
+    },
+    getAgentSummary(agentId: string) {
+      return createFakeAgentSummaries().find((agent) => agent.id === agentId) ?? null;
+    },
+    hasAgent(agentId: string) {
+      return createFakeAgentSummaries().some((agent) => agent.id === agentId);
     },
     async initialize() {
       return;
@@ -237,6 +255,21 @@ export class InMemoryTelegramThreadSelectionStore
   async setCurrent(contextKey: string, threadId: string): Promise<void> {
     this.records.set(contextKey, threadId);
   }
+
+  async getCurrentAgent(contextKey: string): Promise<string | null> {
+    return this.agentRecords.get(contextKey) ?? null;
+  }
+
+  async setCurrentAgent(contextKey: string, agentId: string | null): Promise<void> {
+    if (agentId === null) {
+      this.agentRecords.delete(contextKey);
+      return;
+    }
+
+    this.agentRecords.set(contextKey, agentId);
+  }
+
+  private readonly agentRecords = new Map<string, string>();
 }
 
 export function createFakeTelegramBotClient(): TelegramBotClientLike {
