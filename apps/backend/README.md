@@ -54,6 +54,8 @@ CRON_ENABLED=true
 
 Agent scheduling tool:
 
+- `cron_list_jobs` lists active cron jobs/reminders with their job IDs and next run times.
+- `cron_delete_job` deletes an active cron job/reminder by `job_id`.
 - `cron_schedule_reminder` now takes a cron `expression` directly (seconds supported).
 - Set `one_time=true` to guarantee a single fire (will not repeat).
 - Set `one_time=false` for recurring schedules.

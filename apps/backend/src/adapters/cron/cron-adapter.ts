@@ -9,6 +9,8 @@ import {
   createCronReminderTriggerEvent,
   resolveCronReminderRouting
 } from "./cron-reminder.js";
+import { createCronDeleteJobTool } from "./cron-delete-job-tool.js";
+import { createCronListJobsTool } from "./cron-list-jobs-tool.js";
 import { createCronScheduleReminderTool } from "./cron-schedule-reminder-tool.js";
 import { CronScheduler } from "./cron-scheduler.js";
 
@@ -136,6 +138,12 @@ export function createCronAdapter(options: CronAdapterOptions): AppAdapter | nul
     name: "cron",
     getTools() {
       return [
+        createCronListJobsTool({
+          scheduler
+        }),
+        createCronDeleteJobTool({
+          scheduler
+        }),
         createCronScheduleReminderTool({
           scheduler,
           onScheduled(event) {

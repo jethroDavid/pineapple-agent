@@ -18,6 +18,18 @@ describe("createCronAdapter", () => {
     expect(createCronAdapter({})).toBeNull();
   });
 
+  it("exposes cron list and scheduling tools", () => {
+    const adapter = createCronAdapter({
+      enabled: true
+    });
+
+    expect(adapter?.getTools().map((tool) => tool.name)).toEqual([
+      "cron_list_jobs",
+      "cron_delete_job",
+      "cron_schedule_reminder"
+    ]);
+  });
+
   it("fires configured cron jobs and enqueues trigger events", async () => {
     const enqueuedTriggers: TriggerEvent[] = [];
     const adapter = createCronAdapter({
