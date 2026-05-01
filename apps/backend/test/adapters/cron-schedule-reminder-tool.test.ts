@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createCronScheduleReminderTool } from "../../src/adapters/cron/cron-schedule-reminder-tool.js";
 import { CronScheduler } from "../../src/adapters/cron/cron-scheduler.js";
+import { toAgentFunctionTool } from "../../src/agents/runtime/agent-runtime-tool.js";
 import { InMemoryCronJobStore } from "../support/in-memory-cron-job-store.js";
 
 describe("cron_schedule_reminder tool", () => {
@@ -25,7 +26,8 @@ describe("cron_schedule_reminder tool", () => {
     const input = tool.inputSchema.parse({
       expression: "*/10 * * * * *",
       one_time: true,
-      message: "One-shot reminder"
+      message: "One-shot reminder",
+      agent_id: null
     });
     const output = await tool.execute(input, {
       threadId: "1e012cb8-f42e-42e7-839f-ed65eec2d958"
@@ -37,6 +39,23 @@ describe("cron_schedule_reminder tool", () => {
     expect(output.routing.thread_id).toBe("1e012cb8-f42e-42e7-839f-ed65eec2d958");
     expect(scheduler.listJobs()).toHaveLength(1);
     expect(scheduler.listJobs()[0]?.maxRuns).toBe(1);
+  });
+
+  it("emits a strict OpenAI function schema for nullable agent targets", () => {
+    const { tool } = createTool();
+    const agentTool = toAgentFunctionTool(tool);
+
+    expect(agentTool.type).toBe("function");
+    if (agentTool.type !== "function") {
+      throw new Error("Expected cron_schedule_reminder to be a function tool.");
+    }
+
+    expect((agentTool.parameters as { required?: string[] }).required).toEqual([
+      "expression",
+      "message",
+      "one_time",
+      "agent_id"
+    ]);
   });
 
   it("supports scheduling for a target agent", async () => {
@@ -61,7 +80,8 @@ describe("cron_schedule_reminder tool", () => {
     const input = tool.inputSchema.parse({
       expression: "0 0 */1 * * *",
       one_time: false,
-      message: "Hourly reminder"
+      message: "Hourly reminder",
+      agent_id: null
     });
     const output = await tool.execute(input);
 
@@ -80,7 +100,8 @@ describe("cron_schedule_reminder tool", () => {
       tool.inputSchema.parse({
         expression: "every 5 minutes!",
         one_time: false,
-        message: "Hydrate"
+        message: "Hydrate",
+        agent_id: null
       })
     );
 
@@ -96,7 +117,8 @@ describe("cron_schedule_reminder tool", () => {
         tool.inputSchema.parse({
           expression: "in 0 minutes",
           one_time: true,
-          message: "No-op"
+          message: "No-op",
+          agent_id: null
         })
       )
     ).rejects.toThrow("Expression amount must be greater than zero.");
@@ -110,7 +132,8 @@ describe("cron_schedule_reminder tool", () => {
         tool.inputSchema.parse({
           expression: "every 2 weeks",
           one_time: false,
-          message: "Biweekly"
+          message: "Biweekly",
+          agent_id: null
         })
       )
     ).rejects.toThrow(

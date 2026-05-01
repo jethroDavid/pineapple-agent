@@ -13,7 +13,7 @@ const cronScheduleReminderInputSchema = z.object({
   expression: z.string().min(1),
   message: z.string().min(1),
   one_time: z.boolean(),
-  agent_id: z.string().min(1).optional()
+  agent_id: z.string().min(1).nullable()
 });
 
 const cronScheduleReminderOutputSchema = z.object({
@@ -47,7 +47,7 @@ export function createCronScheduleReminderTool(options: {
   return {
     name: "cron_schedule_reminder",
     description:
-      "Schedule a reminder. Use a cron expression when you have one, or plain text like 'in 15 seconds'. Optionally include agent_id to target a specialist. Example: {\"expression\":\"*/15 * * * * *\",\"message\":\"Follow up\",\"one_time\":true}",
+      "Schedule a reminder. Use a cron expression when you have one, or plain text like 'in 15 seconds'. Set agent_id to a specialist id to target that specialist, or null for the default route. Example: {\"expression\":\"*/15 * * * * *\",\"message\":\"Follow up\",\"one_time\":true,\"agent_id\":null}",
     inputSchema: cronScheduleReminderInputSchema,
     outputSchema: cronScheduleReminderOutputSchema,
     sideEffecting: true,
@@ -65,7 +65,7 @@ export function createCronScheduleReminderTool(options: {
         id: `reminder:${crypto.randomUUID()}`,
         expression: normalizedExpression,
         message: input.message,
-        agentId: input.agent_id,
+        agentId: input.agent_id ?? undefined,
         routing,
         maxRuns: oneShot ? 1 : undefined
       });
