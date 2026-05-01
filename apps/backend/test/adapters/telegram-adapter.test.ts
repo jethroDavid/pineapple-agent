@@ -30,6 +30,29 @@ describe("createTelegramAdapter", () => {
     expect(createTelegramAdapter({})).toBeNull();
   });
 
+  it("returns null when Telegram is explicitly disabled even with config", () => {
+    expect(
+      createTelegramAdapter({
+        enabled: false,
+        botToken: "bot-token",
+        client: createFakeTelegramBotClient({
+          webhookInfo: {
+            url: "",
+            pending_update_count: 0
+          }
+        })
+      })
+    ).toBeNull();
+  });
+
+  it("fails fast when Telegram is explicitly enabled without a bot token", () => {
+    expect(() =>
+      createTelegramAdapter({
+        enabled: true
+      })
+    ).toThrow(/TELEGRAM_BOT_TOKEN/);
+  });
+
   it("fails fast when inbound transport settings are provided without a mode", () => {
     expect(() =>
       createTelegramAdapter({

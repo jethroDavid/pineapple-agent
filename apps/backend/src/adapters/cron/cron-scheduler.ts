@@ -4,6 +4,10 @@ import {
   type ParsedCronExpression
 } from "./cron-expression.js";
 import { trace, traceError } from "../../utils/trace.js";
+import {
+  type CronJobStore,
+  type StoredCronJob
+} from "./cron-job-store.js";
 
 export interface CronJobDefinition {
   id: string;
@@ -30,12 +34,18 @@ export interface CronJobSnapshot {
 
 export class CronScheduler {
   private readonly jobs = new Map<string, ScheduledCronJob>();
+  private readonly store: CronJobStore;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private running = false;
 
   constructor(
-    private readonly onTick: (job: CronJobDefinition, scheduledAt: Date) => Promise<void>
-  ) {}
+    private readonly onTick: (job: CronJobDefinition, scheduledAt: Date) => Promise<void>,
+    options: {
+      store: CronJobStore;
+    }
+  ) {
+    this.store = options.store;
+  }
 
   start(): void {
     if (this.running) {
@@ -58,15 +68,31 @@ export class CronScheduler {
     trace("cron", "scheduler stopped");
   }
 
-  addJob(definition: CronJobDefinition): CronJobSnapshot {
+  async loadJobs(): Promise<CronJobSnapshot[]> {
+    const storedJobs = await this.store.listActive();
+    this.jobs.clear();
+
+    for (const storedJob of storedJobs) {
+      this.jobs.set(storedJob.definition.id, this.toScheduledJob(storedJob));
+    }
+
+    trace("cron", "jobs loaded", {
+      count: this.jobs.size
+    });
+    this.scheduleNextTick();
+
+    return this.listJobs();
+  }
+
+  async addJob(definition: CronJobDefinition): Promise<CronJobSnapshot> {
     if (this.jobs.has(definition.id)) {
       throw new Error(`Cron job ${definition.id} is already scheduled.`);
     }
 
-    return this.upsertJob(definition);
+    return await this.upsertJob(definition);
   }
 
-  upsertJob(definition: CronJobDefinition): CronJobSnapshot {
+  async upsertJob(definition: CronJobDefinition): Promise<CronJobSnapshot> {
     const parsedExpression = parseCronExpression(definition.expression);
     const now = new Date();
     const nextRunAt = getNextCronOccurrence(parsedExpression, now);
@@ -76,6 +102,13 @@ export class CronScheduler {
         `Cron expression "${definition.expression}" did not produce a future run.`
       );
     }
+
+    const storedJob: StoredCronJob = {
+      definition,
+      nextRunAt,
+      runCount: 0
+    };
+    await this.store.save(storedJob);
 
     this.jobs.set(definition.id, {
       definition,
@@ -97,17 +130,18 @@ export class CronScheduler {
     );
   }
 
-  removeJob(jobId: string): boolean {
+  async removeJob(jobId: string): Promise<boolean> {
     const deleted = this.jobs.delete(jobId);
+    const storeDeleted = await this.store.delete(jobId, new Date());
 
-    if (deleted) {
+    if (deleted || storeDeleted) {
       trace("cron", "job removed", {
         jobId
       });
       this.scheduleNextTick();
     }
 
-    return deleted;
+    return deleted || storeDeleted;
   }
 
   listJobs(): CronJobSnapshot[] {
@@ -174,7 +208,7 @@ export class CronScheduler {
           runCount: job.runCount,
           maxRuns: job.definition.maxRuns ?? null
         });
-        this.jobs.delete(job.definition.id);
+        await this.removeCompletedJob(job);
         continue;
       }
 
@@ -185,14 +219,43 @@ export class CronScheduler {
           jobId: job.definition.id,
           expression: job.definition.expression
         });
-        this.jobs.delete(job.definition.id);
+        await this.removeCompletedJob(job);
         continue;
       }
 
       job.nextRunAt = nextRunAt;
+      await this.saveProcessedJob(job);
     }
 
     this.scheduleNextTick();
+  }
+
+  private async removeCompletedJob(job: ScheduledCronJob): Promise<void> {
+    this.jobs.delete(job.definition.id);
+
+    try {
+      await this.store.delete(job.definition.id, new Date());
+    } catch (error) {
+      traceError("cron", "completed job persistence failed", error, {
+        jobId: job.definition.id
+      });
+    }
+  }
+
+  private async saveProcessedJob(job: ScheduledCronJob): Promise<void> {
+    try {
+      await this.store.save({
+        definition: job.definition,
+        nextRunAt: job.nextRunAt,
+        runCount: job.runCount
+      });
+    } catch (error) {
+      traceError("cron", "job state persistence failed", error, {
+        jobId: job.definition.id,
+        nextRunAt: job.nextRunAt.toISOString(),
+        runCount: job.runCount
+      });
+    }
   }
 
   private getNextJob(): ScheduledCronJob | null {
@@ -215,6 +278,15 @@ export class CronScheduler {
       runCount: job.runCount,
       nextRunAt: job.nextRunAt.toISOString(),
       metadata: job.definition.metadata
+    };
+  }
+
+  private toScheduledJob(job: StoredCronJob): ScheduledCronJob {
+    return {
+      definition: job.definition,
+      parsedExpression: parseCronExpression(job.definition.expression),
+      nextRunAt: new Date(job.nextRunAt.getTime()),
+      runCount: job.runCount
     };
   }
 }

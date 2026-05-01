@@ -102,6 +102,40 @@ describe("createAgentRuntime", () => {
 
     expect(createdBackends[0]?.closeCalls).toBe(1);
   });
+
+  it("warns when an agent references an unavailable adapter toolset", async () => {
+    const definitionsDir = await createDefinitionsDir({
+      includeCodexBackend: false,
+      codexToolsets: ["cron"]
+    });
+    const runtime = createRuntime({
+      definitionsDir,
+      sessionBackendRegistry: createSessionBackendRegistry([]),
+      toolsetRegistry: createAgentToolsetRegistry([
+        {
+          id: "cron",
+          tools: [],
+          availability: "unavailable"
+        }
+      ])
+    });
+
+    const initResult = await runtime.initialize();
+
+    expect(initResult.diagnostics).toEqual([
+      {
+        level: "warn",
+        code: "unavailable_toolset_referenced",
+        message: "Agent references an unavailable adapter toolset.",
+        details: {
+          agentId: "codex",
+          toolsetId: "cron"
+        }
+      }
+    ]);
+
+    await runtime.close();
+  });
 });
 
 class FakeSessionBackend implements SessionBackend {
@@ -134,6 +168,7 @@ class FakeSessionBackend implements SessionBackend {
 function createRuntime(options: {
   definitionsDir: string;
   sessionBackendRegistry: ReturnType<typeof createSessionBackendRegistry>;
+  toolsetRegistry?: ReturnType<typeof createAgentToolsetRegistry>;
 }) {
   return createAgentRuntime({
     definitionsDir: options.definitionsDir,
@@ -142,12 +177,15 @@ function createRuntime(options: {
     threadStore: new InMemoryThreadStore(),
     agentThreadStore: new InMemoryAgentThreadStore(),
     specialistSessionStore: new InMemorySpecialistSessionStore(),
-    toolsetRegistry: createAgentToolsetRegistry({}),
+    toolsetRegistry: options.toolsetRegistry ?? createAgentToolsetRegistry([]),
     sessionBackendRegistry: options.sessionBackendRegistry
   });
 }
 
-async function createDefinitionsDir(options: { includeCodexBackend: boolean }): Promise<string> {
+async function createDefinitionsDir(options: {
+  includeCodexBackend: boolean;
+  codexToolsets?: string[];
+}): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "pineapple-runtime-agents-"));
   const promptsDir = join(root, "prompts");
 
@@ -178,6 +216,7 @@ async function createDefinitionsDir(options: { includeCodexBackend: boolean }): 
       description: "Specialist agent.",
       handoffDescription: "Handles coding work.",
       instructionsFile: "./prompts/codex.md",
+      toolsets: options.codexToolsets ?? [],
       ...(options.includeCodexBackend
         ? {
             sessionBackend: {

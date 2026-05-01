@@ -7,14 +7,12 @@ import { createDefaultAdapterPlugins } from "./default-adapter-plugins.js";
 export interface CreateAppAdaptersOptions {
   threadStore: ThreadStore;
   plugins?: AdapterPlugin[];
-  pluginDependencies?: Record<string, unknown>;
 }
 
 export function createAppAdapters(options: CreateAppAdaptersOptions): AppAdapter[] {
   const registry = createAdapterPluginRegistry(options.plugins ?? createDefaultAdapterPlugins());
 
   return registry.createAdapters({
-    threadStore: options.threadStore,
-    pluginDependencies: options.pluginDependencies
+    threadStore: options.threadStore
   });
 }

@@ -1,5 +1,9 @@
 import type { AppAdapter, AppAdapterInitContext } from "../../adapters/app-adapter.js";
-import { createAgentRuntime, type AppAgentRuntime } from "../../agents/agent-runtime.js";
+import {
+  createAgentRuntime,
+  type AgentRuntimeInitResult,
+  type AppAgentRuntime
+} from "../../agents/agent-runtime.js";
 import { createAppServices } from "./services.js";
 import { env } from "../../config/env.js";
 import { resolveProjectRoot } from "../../config/project-root.js";
@@ -17,7 +21,7 @@ interface AppRuntime {
   execution: AppExecutionService;
   agentRuntime: AppAgentRuntime | null;
   initializeAdapters(context: AppAdapterInitContext): Promise<void>;
-  initializeAgentRuntime(): Promise<void>;
+  initializeAgentRuntime(): Promise<AgentRuntimeInitResult | null>;
   closeAgentRuntime(): Promise<void>;
   recoverActiveRuns(): Promise<ExecutionTurnResult[]>;
 }
@@ -81,7 +85,7 @@ export function createAppRuntime(): AppRuntime | null {
       trace("startup", "initialize adapters done");
     },
     async initializeAgentRuntime() {
-      await agentRuntime?.initialize();
+      return (await agentRuntime?.initialize()) ?? null;
     },
     async closeAgentRuntime() {
       await agentRuntime?.close();

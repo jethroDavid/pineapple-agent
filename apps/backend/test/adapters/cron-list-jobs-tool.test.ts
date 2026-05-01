@@ -6,6 +6,7 @@ import {
   resolveCronReminderRouting
 } from "../../src/adapters/cron/cron-reminder.js";
 import { CronScheduler } from "../../src/adapters/cron/cron-scheduler.js";
+import { InMemoryCronJobStore } from "../support/in-memory-cron-job-store.js";
 
 describe("cron_list_jobs tool", () => {
   beforeEach(() => {
@@ -18,7 +19,9 @@ describe("cron_list_jobs tool", () => {
   });
 
   function createTool() {
-    const scheduler = new CronScheduler(async () => undefined);
+    const scheduler = new CronScheduler(async () => undefined, {
+      store: new InMemoryCronJobStore()
+    });
     const tool = createCronListJobsTool({
       scheduler
     });
@@ -44,7 +47,7 @@ describe("cron_list_jobs tool", () => {
   it("lists active cron jobs with ids, next runs, messages, and routing", async () => {
     const { scheduler, tool } = createTool();
 
-    scheduler.addJob(
+    await scheduler.addJob(
       createCronReminderJobDefinition({
         id: "reminder:standup",
         expression: "*/10 * * * * *",
@@ -56,7 +59,7 @@ describe("cron_list_jobs tool", () => {
         maxRuns: 1
       })
     );
-    scheduler.addJob(
+    await scheduler.addJob(
       createCronReminderJobDefinition({
         id: "reminder:heartbeat",
         expression: "*/30 * * * * *",

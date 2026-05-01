@@ -117,11 +117,13 @@ const envSchema = z.object({
     .positive()
     .optional(),
   SHORTCUT_API_TOKEN: optionalString,
+  SHORTCUT_ENABLED: optionalBoolean,
   SHORTCUT_WEBHOOK_SECRET: optionalString,
   SHORTCUT_WEBHOOK_BASE_URL: optionalString,
   SHORTCUT_WEBHOOK_INTEGRATION_ID: optionalString,
   SHORTCUT_AGENT_NAME: optionalString,
   TELEGRAM_BOT_TOKEN: optionalString,
+  TELEGRAM_ENABLED: optionalBoolean,
   TELEGRAM_INBOUND_MODE: optionalTelegramInboundMode,
   TELEGRAM_ALLOWED_UPDATES: optionalStringArray,
   TELEGRAM_WEBHOOK_SECRET: optionalString,

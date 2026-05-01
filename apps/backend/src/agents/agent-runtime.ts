@@ -25,6 +25,7 @@ import {
   type MCPConnectionManager
 } from "./runtime/agent-runtime-setup.js";
 import { executeAgentRuntimeTurn } from "./runtime/agent-runtime-turn.js";
+import type { AppDiagnostic } from "../utils/diagnostics.js";
 import { trace } from "../utils/trace.js";
 
 export interface AgentRuntimeOptions {
@@ -87,7 +88,7 @@ export interface AgentSummary {
 }
 
 export interface AppAgentRuntime {
-  initialize(): Promise<void>;
+  initialize(): Promise<AgentRuntimeInitResult>;
   close(): Promise<void>;
   isReady(): boolean;
   listAgents(): AgentSummary[];
@@ -96,6 +97,10 @@ export interface AppAgentRuntime {
   getEntrypointAgentId(): string | null;
   executeTurn(options: AgentExecuteTurnOptions): Promise<AgentExecuteTurnResult>;
   runTurn(options: AgentRunTurnOptions): Promise<AgentRunTurnResult>;
+}
+
+export interface AgentRuntimeInitResult {
+  diagnostics: AppDiagnostic[];
 }
 
 export function createAgentRuntime(options: AgentRuntimeOptions): AppAgentRuntime {
@@ -137,6 +142,9 @@ export function createAgentRuntime(options: AgentRuntimeOptions): AppAgentRuntim
         entrypointAgentId,
         agentCount: manifests.length
       });
+      return {
+        diagnostics: initializedGraph.diagnostics
+      };
     },
     async close() {
       trace("runtime", "agent runtime close start");

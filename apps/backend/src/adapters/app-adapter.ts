@@ -13,9 +13,15 @@ export interface AppAdapterInitContext {
   execution: AppExecutionService | null;
 }
 
+export interface AppAdapterDatabaseRequirement {
+  schema?: string;
+  relation: string;
+}
+
 export interface AppAdapter {
   readonly name: string;
   getTools(): ToolDefinition[];
+  getDatabaseRequirements?(): AppAdapterDatabaseRequirement[];
   getTriggerPromptEnrichers?(): TriggerPromptEnricher[];
   registerRoutes(app: FastifyInstance, context: AppAdapterRouteContext): void;
   initialize?(context: AppAdapterInitContext): Promise<void>;

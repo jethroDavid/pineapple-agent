@@ -1,5 +1,12 @@
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 
+import {
+  DatabaseSchemaNotInitializedError,
+  ensureDatabaseSchemaReady
+} from "../../src/db/client.js";
 import { agentExecutionKind } from "../../src/execution/domain/agent-execution.js";
 import { DrizzleAgentExecutionDecisionStore } from "../../src/db/stores/agent-execution-decision-store.js";
 import { DrizzleAgentExecutionStore } from "../../src/db/stores/agent-execution-store.js";
@@ -134,5 +141,49 @@ describe("Core persistence invariants", () => {
         subjectId
       })
     ).rejects.toThrow();
+  });
+
+  it("fails schema readiness when an adapter-declared relation is missing", async () => {
+    await expect(
+      ensureDatabaseSchemaReady([
+        {
+          relation: "definitely_missing_adapter_relation"
+        }
+      ])
+    ).rejects.toThrow(DatabaseSchemaNotInitializedError);
+  });
+});
+
+describe("Architecture boundaries", () => {
+  it("keeps core DB schema independent from adapters", async () => {
+    const schemaSource = await readFile(
+      resolve("src/db/schema.ts"),
+      "utf8"
+    );
+
+    expect(schemaSource).not.toMatch(/\.\.\/adapters\//);
+    expect(schemaSource).not.toMatch(/from ["'].*adapters\//);
+  });
+
+  it("discovers adapter-owned DB schemas through Drizzle config", async () => {
+    const drizzleConfigSource = await readFile(
+      resolve("drizzle.config.ts"),
+      "utf8"
+    );
+
+    expect(drizzleConfigSource).toContain("./src/db/schema.ts");
+    expect(drizzleConfigSource).toContain("./src/adapters/**/**-db-schema.ts");
+  });
+
+  it("keeps adapter DB schema files free of runtime imports", async () => {
+    const cronSchemaSource = await readFile(
+      resolve("src/adapters/cron/cron-db-schema.ts"),
+      "utf8"
+    );
+
+    expect(cronSchemaSource).not.toMatch(/cron-scheduler/);
+    expect(cronSchemaSource).not.toMatch(/cron-adapter/);
+    expect(cronSchemaSource).not.toMatch(/cron-.*-tool/);
+    expect(cronSchemaSource).not.toMatch(/config\/env/);
   });
 });

@@ -2,6 +2,7 @@ import { buildApp } from "./entrypoints/http/server.js";
 import { createAppRuntime } from "./entrypoints/bootstrap/runtime.js";
 import { env } from "./config/env.js";
 import { ensureDatabaseSchemaReady } from "./db/client.js";
+import { logDiagnostics } from "./utils/diagnostics.js";
 import { trace, traceError } from "./utils/trace.js";
 
 async function start() {
@@ -26,7 +27,9 @@ async function start() {
 
   if (runtime !== null) {
     try {
-      await ensureDatabaseSchemaReady();
+      await ensureDatabaseSchemaReady(
+        adapters.flatMap((adapter) => adapter.getDatabaseRequirements?.() ?? [])
+      );
       trace("startup", "database schema ready");
     } catch (error) {
       traceError("startup", "database schema check failed", error);
@@ -39,7 +42,8 @@ async function start() {
 
   if (runtime !== null) {
     try {
-      await runtime.initializeAgentRuntime();
+      const initResult = await runtime.initializeAgentRuntime();
+      logDiagnostics(app.log, initResult?.diagnostics ?? []);
       trace("startup", "agent runtime initialized");
     } catch (error) {
       traceError("startup", "agent runtime initialization failed", error);

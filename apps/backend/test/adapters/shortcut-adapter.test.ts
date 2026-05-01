@@ -25,6 +25,24 @@ describe("createShortcutAdapter", () => {
     expect(createShortcutAdapter({})).toBeNull();
   });
 
+  it("returns null when Shortcut is explicitly disabled even with config", () => {
+    expect(
+      createShortcutAdapter({
+        enabled: false,
+        apiToken: "shortcut-token",
+        client: createFakeShortcutClient()
+      })
+    ).toBeNull();
+  });
+
+  it("fails fast when Shortcut is explicitly enabled without an api token", () => {
+    expect(() =>
+      createShortcutAdapter({
+        enabled: true
+      })
+    ).toThrow(/SHORTCUT_API_TOKEN/);
+  });
+
   it("fails fast when webhook settings are incomplete", () => {
     expect(() =>
       createShortcutAdapter({

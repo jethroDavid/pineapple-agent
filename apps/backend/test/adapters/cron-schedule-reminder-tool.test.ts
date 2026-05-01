@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { createCronScheduleReminderTool } from "../../src/adapters/cron/cron-schedule-reminder-tool.js";
 import { CronScheduler } from "../../src/adapters/cron/cron-scheduler.js";
+import { InMemoryCronJobStore } from "../support/in-memory-cron-job-store.js";
 
 describe("cron_schedule_reminder tool", () => {
   function createTool() {
-    const scheduler = new CronScheduler(async () => undefined);
+    const scheduler = new CronScheduler(async () => undefined, {
+      store: new InMemoryCronJobStore()
+    });
     const tool = createCronScheduleReminderTool({
       scheduler
     });
@@ -30,9 +33,26 @@ describe("cron_schedule_reminder tool", () => {
 
     expect(output.ok).toBe(true);
     expect(output.one_shot).toBe(true);
+    expect(output.agent_id).toBeNull();
     expect(output.routing.thread_id).toBe("1e012cb8-f42e-42e7-839f-ed65eec2d958");
     expect(scheduler.listJobs()).toHaveLength(1);
     expect(scheduler.listJobs()[0]?.maxRuns).toBe(1);
+  });
+
+  it("supports scheduling for a target agent", async () => {
+    const { scheduler, tool } = createTool();
+
+    const output = await tool.execute(
+      tool.inputSchema.parse({
+        expression: "*/10 * * * * *",
+        one_time: true,
+        message: "Review this",
+        agent_id: "codex"
+      })
+    );
+
+    expect(output.agent_id).toBe("codex");
+    expect(scheduler.listJobs()[0]?.metadata.agentId).toBe("codex");
   });
 
   it("schedules recurring reminders with cron expressions", async () => {

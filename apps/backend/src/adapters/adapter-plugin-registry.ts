@@ -6,7 +6,6 @@ export interface AdapterPluginRegistry {
   listPluginIds(): string[];
   createAdapters(options: {
     threadStore: ThreadStore;
-    pluginDependencies?: Record<string, unknown>;
   }): AppAdapter[];
 }
 
@@ -40,8 +39,7 @@ export function createAdapterPluginRegistry(plugins: AdapterPlugin[]): AdapterPl
 
       for (const plugin of orderedPlugins) {
         const adapter = plugin.create({
-          threadStore: options.threadStore,
-          dependencies: options.pluginDependencies?.[plugin.id]
+          threadStore: options.threadStore
         });
 
         if (adapter !== null) {

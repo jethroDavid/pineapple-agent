@@ -21,6 +21,7 @@ const defaultTelegramWebhookAllowedUpdates = ["message", "edited_message"] as co
 const defaultTelegramWebhookMaxConnections = 10;
 
 export interface TelegramAdapterOptions {
+  enabled?: boolean | null;
   botToken?: string | null;
   inboundMode?: TelegramInboundMode | null;
   allowedUpdates?: string[];
@@ -67,6 +68,7 @@ export function normalizeTelegramAdapterOptions(
     options.webhookMaxConnections ?? defaultTelegramWebhookMaxConnections;
   const pollIntervalMs = options.pollIntervalMs ?? defaultTelegramPollIntervalMs;
   const pollTimeoutSeconds = options.pollTimeoutSeconds ?? defaultTelegramPollTimeoutSeconds;
+  const enabled = options.enabled ?? null;
   const hasWebhookConfig =
     webhookSecret !== null ||
     webhookBaseUrl !== null ||
@@ -74,10 +76,15 @@ export function normalizeTelegramAdapterOptions(
   const hasPollingConfig =
     options.pollIntervalMs !== undefined || options.pollTimeoutSeconds !== undefined;
   const hasAnyConfig =
+    enabled === true ||
     botToken !== null ||
     inboundMode !== null ||
     hasWebhookConfig ||
     hasPollingConfig;
+
+  if (enabled === false) {
+    return null;
+  }
 
   if (!hasAnyConfig) {
     return null;

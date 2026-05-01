@@ -16,6 +16,7 @@ import type { SessionBackendRegistry } from "../session-backends/session-backend
 import type { AgentRuntimeOptions, AgentSummary } from "../agent-runtime.js";
 import { toAgentFunctionTool } from "./agent-runtime-tool.js";
 import { toHostedTools } from "./agent-runtime-hosted-tool.js";
+import type { AppDiagnostic } from "../../utils/diagnostics.js";
 import { trace } from "../../utils/trace.js";
 
 export type MCPConnectionManager = Awaited<ReturnType<typeof connectMcpServers>>;
@@ -33,8 +34,10 @@ export async function initializeAgentGraph(input: {
   manifests: LoadedAgentManifest[];
   entrypointAgentId: string | null;
   connectionManager: MCPConnectionManager | null;
+  diagnostics: AppDiagnostic[];
 }> {
   const manifests = await loadAgentManifests(resolve(input.options.definitionsDir));
+  const diagnostics: AppDiagnostic[] = [];
   const entrypointAgentId = manifests.find((manifest) => manifest.entrypoint)?.id ?? null;
   trace("runtime", "loaded agent manifests", {
     count: manifests.length,
@@ -48,6 +51,23 @@ export async function initializeAgentGraph(input: {
       handoffs: manifest.handoffs,
       agentTools: manifest.agentTools
     });
+    for (const toolsetId of manifest.toolsets) {
+      if (input.options.toolsetRegistry.isUnavailable(toolsetId)) {
+        diagnostics.push({
+          level: "warn",
+          code: "unavailable_toolset_referenced",
+          message: "Agent references an unavailable adapter toolset.",
+          details: {
+            agentId: manifest.id,
+            toolsetId
+          }
+        });
+        trace("runtime", "unavailable toolset referenced", {
+          agentId: manifest.id,
+          toolsetId
+        });
+      }
+    }
     const ownedServerIds = new Set(input.sessionBackendRegistry.getOwnedServerIds(manifest));
     const genericServers = manifest.mcpServers
       .filter((server) => !ownedServerIds.has(server.id))
@@ -181,7 +201,8 @@ export async function initializeAgentGraph(input: {
   return {
     manifests,
     entrypointAgentId,
-    connectionManager
+    connectionManager,
+    diagnostics
   };
 }
 

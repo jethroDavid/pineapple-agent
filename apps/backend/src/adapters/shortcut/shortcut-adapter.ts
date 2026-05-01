@@ -27,6 +27,7 @@ import {
 import { trace, traceError } from "../../utils/trace.js";
 
 interface ShortcutAdapterOptions {
+  enabled?: boolean | null;
   apiToken?: string | null;
   webhookSecret?: string | null;
   webhookBaseUrl?: string | null;
@@ -99,8 +100,17 @@ function normalizeShortcutAdapterOptions(
   const webhookBaseUrl = options.webhookBaseUrl?.trim() ?? null;
   const webhookIntegrationId = options.webhookIntegrationId?.trim() ?? null;
   const agentName = options.agentName?.trim() || "pineapple";
+  const enabled = options.enabled ?? null;
   const hasWebhookConfig = webhookSecret !== null || webhookBaseUrl !== null;
-  const hasAnyConfig = apiToken !== null || hasWebhookConfig || options.client !== undefined;
+  const hasAnyConfig =
+    enabled === true ||
+    apiToken !== null ||
+    hasWebhookConfig ||
+    options.client !== undefined;
+
+  if (enabled === false) {
+    return null;
+  }
 
   if (!hasAnyConfig) {
     return null;

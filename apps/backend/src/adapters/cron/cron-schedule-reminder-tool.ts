@@ -12,7 +12,8 @@ import {
 const cronScheduleReminderInputSchema = z.object({
   expression: z.string().min(1),
   message: z.string().min(1),
-  one_time: z.boolean()
+  one_time: z.boolean(),
+  agent_id: z.string().min(1).optional()
 });
 
 const cronScheduleReminderOutputSchema = z.object({
@@ -21,6 +22,7 @@ const cronScheduleReminderOutputSchema = z.object({
   expression: z.string().min(1),
   one_shot: z.boolean(),
   next_run_at: z.string().min(1),
+  agent_id: z.string().min(1).nullable(),
   routing: z.object({
     thread_id: z.string().min(1).nullable(),
     subject_type: z.string().min(1).nullable(),
@@ -45,7 +47,7 @@ export function createCronScheduleReminderTool(options: {
   return {
     name: "cron_schedule_reminder",
     description:
-      "Schedule a reminder. Use a cron expression when you have one, or plain text like 'in 15 seconds'. Example: {\"expression\":\"*/15 * * * * *\",\"message\":\"Follow up\",\"one_time\":true}",
+      "Schedule a reminder. Use a cron expression when you have one, or plain text like 'in 15 seconds'. Optionally include agent_id to target a specialist. Example: {\"expression\":\"*/15 * * * * *\",\"message\":\"Follow up\",\"one_time\":true}",
     inputSchema: cronScheduleReminderInputSchema,
     outputSchema: cronScheduleReminderOutputSchema,
     sideEffecting: true,
@@ -63,10 +65,11 @@ export function createCronScheduleReminderTool(options: {
         id: `reminder:${crypto.randomUUID()}`,
         expression: normalizedExpression,
         message: input.message,
+        agentId: input.agent_id,
         routing,
         maxRuns: oneShot ? 1 : undefined
       });
-      const snapshot = options.scheduler.addJob(job);
+      const snapshot = await options.scheduler.addJob(job);
 
       trace("tool:cron_schedule_reminder", "scheduled", {
         jobId: snapshot.id,
@@ -90,6 +93,7 @@ export function createCronScheduleReminderTool(options: {
         expression: snapshot.expression,
         one_shot: oneShot,
         next_run_at: snapshot.nextRunAt,
+        agent_id: input.agent_id ?? null,
         routing: {
           thread_id: routing.threadId ?? null,
           subject_type: routing.subjectType ?? null,

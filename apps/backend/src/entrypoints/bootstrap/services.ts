@@ -1,6 +1,7 @@
 import type { AppAdapter } from "../../adapters/app-adapter.js";
 import {
   createAgentToolsetRegistry,
+  type AgentToolGroupEntry,
   type AgentToolsetRegistry
 } from "../../agents/agent-toolset-registry.js";
 import type { AgentThreadStore } from "../../agents/store/agent-thread-store.js";
@@ -19,7 +20,6 @@ import type { AgentExecutionDecisionStore } from "../../execution/store/agent-ex
 import type { AgentExecutionStore } from "../../execution/store/agent-execution-store.js";
 import { trace } from "../../utils/trace.js";
 import type { TriggerPromptEnricher } from "../../execution/pipeline/trigger-prompt-enrichment.js";
-import type { ToolDefinition } from "../../tools/tool-definition.js";
 
 interface AppServices {
   adapters: AppAdapter[];
@@ -50,29 +50,42 @@ export function createAppServices(): AppServices | null {
   const triggerPromptEnrichers = adapters.flatMap(
     (adapter) => adapter.getTriggerPromptEnrichers?.() ?? []
   );
-  const toolsByAdapterId: Record<string, ToolDefinition[]> = Object.fromEntries(
-    createDefaultAdapterPlugins().map((plugin) => [plugin.id, [] as ToolDefinition[]])
-  );
+  const defaultAdapterPlugins = createDefaultAdapterPlugins();
   const toolRegistry = new ToolRegistry();
+  const toolsByAdapterId = new Map<string, ReturnType<AppAdapter["getTools"]>>();
+  const availableAdapterIds = new Set<string>();
 
   for (const adapter of adapters) {
     const tools = adapter.getTools();
-    toolsByAdapterId[adapter.name] = tools;
+    toolsByAdapterId.set(adapter.name, tools);
+    availableAdapterIds.add(adapter.name);
 
     for (const tool of tools) {
       toolRegistry.register(tool);
     }
   }
 
-  const agentToolsetRegistry = createAgentToolsetRegistry({
-    app: toolRegistry.list(),
-    ...toolsByAdapterId
-  });
+  const adapterToolGroups: AgentToolGroupEntry[] = defaultAdapterPlugins.map((plugin) => ({
+    id: plugin.id,
+    tools: toolsByAdapterId.get(plugin.id) ?? [],
+    availability: availableAdapterIds.has(plugin.id) ? "available" : "unavailable"
+  }));
+  const agentToolsetRegistry = createAgentToolsetRegistry([
+    {
+      id: "app",
+      tools: toolRegistry.list(),
+      availability: "available"
+    },
+    ...adapterToolGroups
+  ]);
   trace("startup", "services ready", {
     adapterCount: adapters.length,
     adapters: adapters.map((adapter) => adapter.name),
     toolCount: toolRegistry.list().length,
-    toolsets: agentToolsetRegistry.listToolsetIds()
+    toolsets: agentToolsetRegistry.listToolsetIds(),
+    unavailableToolsets: adapterToolGroups
+      .filter((toolGroup) => toolGroup.availability === "unavailable")
+      .map((toolGroup) => toolGroup.id)
   });
 
   return {

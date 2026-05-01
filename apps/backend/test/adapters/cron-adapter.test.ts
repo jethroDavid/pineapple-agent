@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createCronAdapter } from "../../src/adapters/cron/cron-adapter.js";
+import { cronAdapterPlugin } from "../../src/adapters/cron/cron-adapter-plugin.js";
 import type { TriggerEvent } from "../../src/execution/contracts/trigger-event.js";
 import type { AppExecutionService } from "../../src/execution/pipeline/service.js";
+import { InMemoryCronJobStore } from "../support/in-memory-cron-job-store.js";
 
 describe("createCronAdapter", () => {
   beforeEach(() => {
@@ -18,9 +20,48 @@ describe("createCronAdapter", () => {
     expect(createCronAdapter({})).toBeNull();
   });
 
+  it("returns null when cron is explicitly disabled even with configured jobs", () => {
+    expect(
+      createCronAdapter({
+        enabled: false,
+        jobsJson: JSON.stringify([
+          {
+            id: "heartbeat",
+            expression: "*/2 * * * * *",
+            message: "Heartbeat reminder"
+          }
+        ])
+      })
+    ).toBeNull();
+  });
+
+  it("auto-enables cron when configured jobs are provided", () => {
+    expect(
+      createCronAdapter({
+        jobStore: new InMemoryCronJobStore(),
+        jobsJson: JSON.stringify([
+          {
+            id: "heartbeat",
+            expression: "*/2 * * * * *",
+            message: "Heartbeat reminder"
+          }
+        ])
+      })
+    ).not.toBeNull();
+  });
+
+  it("does not require host-provided storage dependencies when created through the plugin", () => {
+    expect(() =>
+      cronAdapterPlugin.create({
+        threadStore: {} as never
+      })
+    ).not.toThrow();
+  });
+
   it("exposes cron list and scheduling tools", () => {
     const adapter = createCronAdapter({
-      enabled: true
+      enabled: true,
+      jobStore: new InMemoryCronJobStore()
     });
 
     expect(adapter?.getTools().map((tool) => tool.name)).toEqual([
@@ -30,10 +71,24 @@ describe("createCronAdapter", () => {
     ]);
   });
 
+  it("declares the cron jobs table requirement", () => {
+    const adapter = createCronAdapter({
+      enabled: true,
+      jobStore: new InMemoryCronJobStore()
+    });
+
+    expect(adapter?.getDatabaseRequirements?.()).toEqual([
+      {
+        relation: "cron_jobs"
+      }
+    ]);
+  });
+
   it("fires configured cron jobs and enqueues trigger events", async () => {
     const enqueuedTriggers: TriggerEvent[] = [];
     const adapter = createCronAdapter({
       enabled: true,
+      jobStore: new InMemoryCronJobStore(),
       jobsJson: JSON.stringify([
         {
           id: "heartbeat",
@@ -69,6 +124,33 @@ describe("createCronAdapter", () => {
         allow_unbound_thread: true
       }
     });
+  });
+
+  it("seeds configured cron jobs into the job store", async () => {
+    const jobStore = new InMemoryCronJobStore();
+    const adapter = createCronAdapter({
+      enabled: true,
+      jobStore,
+      jobsJson: JSON.stringify([
+        {
+          id: "heartbeat",
+          expression: "*/30 * * * * *",
+          message: "Heartbeat reminder",
+          allow_unbound_thread: true
+        }
+      ])
+    });
+
+    await adapter!.initialize?.({
+      logger: createFakeLogger(),
+      execution: createFakeExecutionService([])
+    });
+
+    const jobs = await jobStore.listActive();
+
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]?.definition.id).toBe("heartbeat");
+    expect(jobs[0]?.definition.metadata.message).toBe("Heartbeat reminder");
   });
 });
 

@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import { DrizzleQueryError } from "drizzle-orm/errors";
+import { sql } from "drizzle-orm";
 import pg from "pg";
 
 import { env } from "../config/env.js";
@@ -9,13 +9,25 @@ let database: ReturnType<typeof drizzle<typeof schema>> | null = null;
 let pool: pg.Pool | null = null;
 
 export class DatabaseSchemaNotInitializedError extends Error {
-  constructor(options?: ErrorOptions) {
+  constructor(missingRelations: string[] = [], options?: ErrorOptions) {
     super(
-      "Database schema is not initialized. Run `pnpm db:migrate` before starting Pineapple.",
+      [
+        "Database schema is not initialized. Run `pnpm db:migrate` before starting Pineapple.",
+        missingRelations.length > 0
+          ? `Missing relation(s): ${missingRelations.join(", ")}.`
+          : null
+      ]
+        .filter(Boolean)
+        .join(" "),
       options
     );
     this.name = "DatabaseSchemaNotInitializedError";
   }
+}
+
+export interface DatabaseRelationRequirement {
+  schema?: string;
+  relation: string;
 }
 
 export function getDb() {
@@ -35,24 +47,32 @@ export function getDb() {
   return database;
 }
 
-export async function ensureDatabaseSchemaReady(): Promise<void> {
+export async function ensureDatabaseSchemaReady(
+  requirements: DatabaseRelationRequirement[] = []
+): Promise<void> {
   const db = getDb();
+  const missingRelations: string[] = [];
+  const allRequirements = dedupeRelationRequirements([
+    {
+      relation: "threads"
+    },
+    ...requirements
+  ]);
 
-  try {
-    await db
-      .select({
-        threadId: schema.threads.threadId
-      })
-      .from(schema.threads)
-      .limit(1);
-  } catch (error) {
-    if (isMissingRelationError(error)) {
-      throw new DatabaseSchemaNotInitializedError({
-        cause: error
-      });
+  for (const requirement of allRequirements) {
+    const relationName = formatRelationName(requirement);
+    const result = await db.execute<{ relation: string | null }>(
+      sql`select to_regclass(${relationName}) as relation`
+    );
+    const relation = result.rows[0]?.relation ?? null;
+
+    if (relation === null) {
+      missingRelations.push(relationName);
     }
+  }
 
-    throw error;
+  if (missingRelations.length > 0) {
+    throw new DatabaseSchemaNotInitializedError(missingRelations);
   }
 }
 
@@ -67,16 +87,27 @@ export async function closeDb(): Promise<void> {
   pool = null;
 }
 
-function isMissingRelationError(error: unknown): boolean {
-  if (!(error instanceof DrizzleQueryError)) {
-    return false;
+function dedupeRelationRequirements(
+  requirements: DatabaseRelationRequirement[]
+): DatabaseRelationRequirement[] {
+  const seen = new Set<string>();
+  const deduped: DatabaseRelationRequirement[] = [];
+
+  for (const requirement of requirements) {
+    const relationName = formatRelationName(requirement);
+    if (seen.has(relationName)) {
+      continue;
+    }
+
+    seen.add(relationName);
+    deduped.push(requirement);
   }
 
-  const cause = error.cause as
-    | {
-        code?: string;
-      }
-    | undefined;
+  return deduped;
+}
 
-  return cause?.code === "42P01";
+function formatRelationName(requirement: DatabaseRelationRequirement): string {
+  return requirement.schema
+    ? `${requirement.schema}.${requirement.relation}`
+    : requirement.relation;
 }

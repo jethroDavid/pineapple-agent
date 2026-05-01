@@ -3,10 +3,13 @@ import { describe, expect, it } from "vitest";
 import { createCronDeleteJobTool } from "../../src/adapters/cron/cron-delete-job-tool.js";
 import { createCronReminderJobDefinition } from "../../src/adapters/cron/cron-reminder.js";
 import { CronScheduler } from "../../src/adapters/cron/cron-scheduler.js";
+import { InMemoryCronJobStore } from "../support/in-memory-cron-job-store.js";
 
 describe("cron_delete_job tool", () => {
   function createTool() {
-    const scheduler = new CronScheduler(async () => undefined);
+    const scheduler = new CronScheduler(async () => undefined, {
+      store: new InMemoryCronJobStore()
+    });
     const tool = createCronDeleteJobTool({
       scheduler
     });
@@ -19,7 +22,7 @@ describe("cron_delete_job tool", () => {
 
   it("deletes an active cron job by id", async () => {
     const { scheduler, tool } = createTool();
-    scheduler.addJob(
+    await scheduler.addJob(
       createCronReminderJobDefinition({
         id: "reminder:follow-up",
         expression: "*/10 * * * * *",

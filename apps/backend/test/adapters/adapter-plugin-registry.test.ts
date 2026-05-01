@@ -50,7 +50,7 @@ describe("createAdapterPluginRegistry", () => {
     ]);
   });
 
-  it("passes dependency overrides to matching plugins", () => {
+  it("creates plugins with app-owned context only", () => {
     const createPlugin = vi.fn(() => createFakeAdapter("shortcut"));
     const registry = createAdapterPluginRegistry([
       createFakePlugin({
@@ -62,19 +62,11 @@ describe("createAdapterPluginRegistry", () => {
     const threadStore = new InMemoryThreadStore();
 
     registry.createAdapters({
-      threadStore,
-      pluginDependencies: {
-        shortcut: {
-          client: "fake"
-        }
-      }
+      threadStore
     });
 
     expect(createPlugin).toHaveBeenCalledWith({
-      threadStore,
-      dependencies: {
-        client: "fake"
-      }
+      threadStore
     });
   });
 

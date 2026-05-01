@@ -30,7 +30,7 @@ export function createCronDeleteJobTool(options: {
     approvalRequired: false,
     idempotent: true,
     async execute(input) {
-      const deleted = options.scheduler.removeJob(input.job_id);
+      const deleted = await options.scheduler.removeJob(input.job_id);
 
       trace("tool:cron_delete_job", "deleted", {
         jobId: input.job_id,

@@ -10,6 +10,7 @@ import {
   resolveCronReminderRouting
 } from "./cron-reminder.js";
 import { createCronDeleteJobTool } from "./cron-delete-job-tool.js";
+import type { CronJobStore } from "./cron-job-store.js";
 import { createCronListJobsTool } from "./cron-list-jobs-tool.js";
 import { createCronScheduleReminderTool } from "./cron-schedule-reminder-tool.js";
 import { CronScheduler } from "./cron-scheduler.js";
@@ -17,6 +18,7 @@ import { CronScheduler } from "./cron-scheduler.js";
 interface CronAdapterOptions {
   enabled?: boolean | null;
   jobsJson?: string | null;
+  jobStore?: CronJobStore;
 }
 
 const cronConfiguredJobSchema = z
@@ -53,89 +55,86 @@ export function createCronAdapter(options: CronAdapterOptions): AppAdapter | nul
     return null;
   }
 
+  if (options.jobStore === undefined) {
+    throw new Error("Cron adapter requires a persistent job store when enabled.");
+  }
+
   let logger: FastifyBaseLogger | null = null;
   let execution: AppExecutionService | null = null;
 
-  const scheduler = new CronScheduler(async (job, scheduledAt) => {
-    if (execution === null) {
-      throw new Error("Execution service is not configured.");
-    }
+  const scheduler = new CronScheduler(
+    async (job, scheduledAt) => {
+      if (execution === null) {
+        throw new Error("Execution service is not configured.");
+      }
 
-    const triggerEvent = createCronReminderTriggerEvent(job, scheduledAt);
+      const triggerEvent = createCronReminderTriggerEvent(job, scheduledAt);
 
-    logger?.debug(
-      {
+      logger?.debug(
+        {
+          jobId: job.id,
+          expression: job.expression,
+          scheduledAt: scheduledAt.toISOString(),
+          triggerId: triggerEvent.trigger_id
+        },
+        "Cron job fired."
+      );
+      trace("cron", "fired", {
         jobId: job.id,
         expression: job.expression,
         scheduledAt: scheduledAt.toISOString(),
         triggerId: triggerEvent.trigger_id
-      },
-      "Cron job fired."
-    );
-    trace("cron", "fired", {
-      jobId: job.id,
-      expression: job.expression,
-      scheduledAt: scheduledAt.toISOString(),
-      triggerId: triggerEvent.trigger_id
-    });
+      });
 
-    execution.enqueueTrigger(
-      triggerEvent,
-      (error) => {
-        logger?.error(
-          {
-            ...(error instanceof Error ? { err: error } : { error }),
+      execution.enqueueTrigger(
+        triggerEvent,
+        (error) => {
+          logger?.error(
+            {
+              ...(error instanceof Error ? { err: error } : { error }),
+              jobId: job.id,
+              triggerId: triggerEvent.trigger_id
+            },
+            "Cron trigger execution failed."
+          );
+          traceError("cron", "trigger failed", error, {
             jobId: job.id,
             triggerId: triggerEvent.trigger_id
-          },
-          "Cron trigger execution failed."
-        );
-        traceError("cron", "trigger failed", error, {
-          jobId: job.id,
-          triggerId: triggerEvent.trigger_id
-        });
-      },
-      (result) => {
-        logger?.debug(
-          {
+          });
+        },
+        (result) => {
+          logger?.debug(
+            {
+              jobId: job.id,
+              triggerId: triggerEvent.trigger_id,
+              executionId: result.execution.executionId,
+              executionStatus: result.execution.status
+            },
+            "Cron trigger enqueued successfully."
+          );
+          trace("cron", "trigger queued", {
             jobId: job.id,
             triggerId: triggerEvent.trigger_id,
             executionId: result.execution.executionId,
             executionStatus: result.execution.status
-          },
-          "Cron trigger enqueued successfully."
-        );
-        trace("cron", "trigger queued", {
-          jobId: job.id,
-          triggerId: triggerEvent.trigger_id,
-          executionId: result.execution.executionId,
-          executionStatus: result.execution.status
-        });
-      }
-    );
-  });
-
-  for (const job of normalized.jobs) {
-    scheduler.addJob(
-      createCronReminderJobDefinition({
-        id: job.id,
-        expression: job.expression,
-        message: job.message,
-        instructions: job.instructions,
-        agentId: job.agent_id,
-        routing: resolveCronReminderRouting({
-          threadId: job.thread_id,
-          subjectType: job.subject_type,
-          subjectId: job.subject_id,
-          allowUnboundThread: job.allow_unbound_thread
-        }),
-        maxRuns: job.max_runs
-      })
-    );
-  }
+          });
+        }
+      );
+    },
+    {
+      store: options.jobStore
+    }
+  );
 
   return {
     name: "cron",
+    getDatabaseRequirements() {
+      return [
+        {
+          relation: "cron_jobs"
+        }
+      ];
+    },
     getTools() {
       return [
         createCronListJobsTool({
@@ -170,6 +169,10 @@ export function createCronAdapter(options: CronAdapterOptions): AppAdapter | nul
         throw new Error("Cron adapter requires execution service to be configured.");
       }
 
+      await scheduler.loadJobs();
+      for (const job of normalized.jobs) {
+        await scheduler.upsertJob(toCronJobDefinition(job));
+      }
       scheduler.start();
       trace("cron", "adapter initialized", {
         configuredJobCount: normalized.jobs.length
@@ -187,6 +190,10 @@ export function createCronAdapter(options: CronAdapterOptions): AppAdapter | nul
 function normalizeCronAdapterOptions(options: CronAdapterOptions): {
   jobs: CronConfiguredJob[];
 } | null {
+  if (options.enabled === false) {
+    return null;
+  }
+
   const enabled = options.enabled === true;
   const jobsJson = options.jobsJson?.trim() ?? "";
 
@@ -213,4 +220,21 @@ function parseCronConfiguredJobs(raw: string): CronConfiguredJob[] {
   }
 
   return cronConfiguredJobsSchema.parse(parsed);
+}
+
+function toCronJobDefinition(job: CronConfiguredJob) {
+  return createCronReminderJobDefinition({
+    id: job.id,
+    expression: job.expression,
+    message: job.message,
+    instructions: job.instructions,
+    agentId: job.agent_id,
+    routing: resolveCronReminderRouting({
+      threadId: job.thread_id,
+      subjectType: job.subject_type,
+      subjectId: job.subject_id,
+      allowUnboundThread: job.allow_unbound_thread
+    }),
+    maxRuns: job.max_runs
+  });
 }
