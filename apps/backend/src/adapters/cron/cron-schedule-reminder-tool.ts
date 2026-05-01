@@ -9,6 +9,8 @@ import {
   resolveCronReminderRouting
 } from "./cron-reminder.js";
 
+export const cronReminderScheduledTurnMarker = "cron.reminder_scheduled";
+
 const cronScheduleReminderInputSchema = z.object({
   expression: z.string().min(1),
   message: z.string().min(1),
@@ -53,6 +55,9 @@ export function createCronScheduleReminderTool(options: {
     sideEffecting: true,
     approvalRequired: false,
     idempotent: false,
+    turnPolicy: {
+      recordMarker: cronReminderScheduledTurnMarker
+    },
     async execute(input, context) {
       const normalizedExpression = resolveCronReminderExpression(input.expression, {
         oneShot: input.one_time

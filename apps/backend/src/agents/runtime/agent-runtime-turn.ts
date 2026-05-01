@@ -106,7 +106,8 @@ export async function executeAgentRuntimeTurn(input: {
           session,
           context: {
             threadId: thread.threadId,
-            specialistSessions
+            specialistSessions,
+            turnSideEffects: new Set()
           }
         }
       );

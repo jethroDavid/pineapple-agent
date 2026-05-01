@@ -126,6 +126,35 @@ describe("createCronAdapter", () => {
     });
   });
 
+  it("targets Scheduler for configured reminder ticks without an explicit agent", async () => {
+    const enqueuedTriggers: TriggerEvent[] = [];
+    const adapter = createCronAdapter({
+      enabled: true,
+      jobStore: new InMemoryCronJobStore(),
+      jobsJson: JSON.stringify([
+        {
+          id: "heartbeat",
+          expression: "*/2 * * * * *",
+          message: "Heartbeat reminder",
+          allow_unbound_thread: true
+        }
+      ])
+    });
+
+    await adapter!.initialize?.({
+      logger: createFakeLogger(),
+      execution: createFakeExecutionService(enqueuedTriggers)
+    });
+
+    await vi.advanceTimersByTimeAsync(2100);
+
+    expect(enqueuedTriggers[0]).toMatchObject({
+      payload: {
+        agent_id: "scheduler"
+      }
+    });
+  });
+
   it("seeds configured cron jobs into the job store", async () => {
     const jobStore = new InMemoryCronJobStore();
     const adapter = createCronAdapter({

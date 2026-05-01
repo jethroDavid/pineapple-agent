@@ -20,6 +20,8 @@ export interface CronReminderJobMetadata extends Record<string, unknown> {
   routing: CronReminderRouting;
 }
 
+export const defaultCronReminderAgentId = "scheduler";
+
 export interface CreateCronReminderJobOptions {
   id: string;
   expression: string;
@@ -78,7 +80,7 @@ export function createCronReminderTriggerEvent(
         `Scheduled at: ${scheduledAt.toISOString()}`
       ].join("\n"),
       instructions: mergeReminderInstructions(defaultInstructions, metadata.instructions),
-      agent_id: metadata.agentId
+      agent_id: metadata.agentId ?? defaultCronReminderAgentId
     },
     received_at: scheduledAt.toISOString()
   });

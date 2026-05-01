@@ -6,6 +6,18 @@ export interface ToolExecutionContext {
   threadId?: string;
 }
 
+export interface ToolTurnPolicy<Input extends JsonObject = JsonObject> {
+  recordMarker?: string;
+  blockedByMarkers?: {
+    markers: string[];
+    message: string;
+  };
+  onlyOncePerTurn?: {
+    marker: string;
+    createDuplicateOutput(input: Input): JsonValue;
+  };
+}
+
 export interface ToolDefinition<
   Input extends JsonObject = JsonObject,
   Output extends JsonValue = JsonValue
@@ -17,5 +29,6 @@ export interface ToolDefinition<
   sideEffecting: boolean;
   approvalRequired: boolean;
   idempotent: boolean;
+  turnPolicy?: ToolTurnPolicy<Input>;
   execute(input: Input, context?: ToolExecutionContext): Promise<Output>;
 }

@@ -5,7 +5,7 @@
   "handoffDescription": "Handles mobile audio bridge requests with concise spoken-ready answers.",
   "instructionsFile": "./prompts/assistant-audio-bridge.md",
   "modelPreset": "app",
-  "toolsets": ["assistant_audio_bridge"],
+  "toolsets": ["assistant_audio_bridge", "telegram"],
   "hostedTools": [
     {
       "type": "web_search"

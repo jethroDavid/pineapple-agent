@@ -22,6 +22,7 @@ const telegramSendMessageOutputSchema = z.object({
 });
 
 type TelegramSendMessageOutput = z.infer<typeof telegramSendMessageOutputSchema>;
+const telegramMessageSentTurnMarker = "telegram.message_sent";
 
 export function createTelegramSendMessageTool(options: {
   client: TelegramBotClientLike;
@@ -37,6 +38,22 @@ export function createTelegramSendMessageTool(options: {
     sideEffecting: true,
     approvalRequired: false,
     idempotent: false,
+    turnPolicy: {
+      onlyOncePerTurn: {
+        marker: telegramMessageSentTurnMarker,
+        createDuplicateOutput(input) {
+          const chatId = Number.parseInt(input.chat_id, 10);
+
+          return {
+            ok: true,
+            message_id: 0,
+            chat_id: Number.isFinite(chatId) ? chatId : 0,
+            chat_type: "private",
+            date: Math.floor(Date.now() / 1000)
+          };
+        }
+      }
+    },
     async execute(input): Promise<TelegramSendMessageOutput> {
       const result = await client.sendMessage({
         chat_id: input.chat_id,

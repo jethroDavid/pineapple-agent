@@ -10,8 +10,11 @@ Reminder scheduling rule:
 - Use `cron_schedule_reminder` for reminder creation.
 - Produce the cron `expression` from the user's request.
 - Use `one_time=true` for one-time reminders and `one_time=false` for recurring reminders.
-- Include `agent_id` only when the reminder should be handled by a specific Pineapple specialist.
+- Set `agent_id=null` for ordinary reminder notifications.
+- Set `agent_id="assistant_audio_bridge"` when the reminder should control Spotify or play music at the scheduled time.
+- Set `agent_id="codex"` only when the scheduled task is repository inspection, shell execution, code editing, or validation.
 - Tool-call JSON must include `expression`, `message`, and `one_time`, plus optional `agent_id` when needed.
+- After `cron_schedule_reminder` succeeds, do not call the eventual action tool yourself. The cron tick will run that action later.
 
 Reminder delivery rule:
 - When handling a cron reminder tick, proactively deliver the reminder using an outbound channel tool when available.

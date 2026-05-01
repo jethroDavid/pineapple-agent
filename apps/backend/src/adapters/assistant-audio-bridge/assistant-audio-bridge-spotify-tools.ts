@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import { z } from "zod";
 
 import type { ToolDefinition } from "../../tools/tool-definition.js";
+import { cronReminderScheduledTurnMarker } from "../cron/cron-schedule-reminder-tool.js";
 import {
   AssistantAudioBridgeSpotifyClient,
   type AssistantAudioBridgeSpotifyDevice
@@ -71,6 +72,14 @@ interface AssistantAudioBridgeSpotifyToolOptions {
   spotifyDevicesCachePath: string;
 }
 
+const blockAfterReminderSchedulePolicy = {
+  blockedByMarkers: {
+    markers: [cronReminderScheduledTurnMarker],
+    message:
+      "A future reminder was already scheduled in this turn. Do not execute Spotify playback now; wait for the cron reminder tick."
+  }
+};
+
 export const assistantAudioBridgeSpotifyToolNames = {
   listDevices: "assistant_bridge_spotify_list_devices",
   play: "assistant_bridge_spotify_play",
@@ -101,6 +110,7 @@ function createSpotifyListDevicesTool(
     sideEffecting: false,
     approvalRequired: false,
     idempotent: false,
+    turnPolicy: blockAfterReminderSchedulePolicy,
     async execute(input) {
       const spotifyClient = requireSpotifyClient(options.spotifyClient);
       const cached = await readSpotifyDeviceCache(options.spotifyDevicesCachePath);
@@ -150,6 +160,7 @@ function createSpotifyPlayTool(
     sideEffecting: true,
     approvalRequired: false,
     idempotent: false,
+    turnPolicy: blockAfterReminderSchedulePolicy,
     async execute(input) {
       const spotifyClient = requireSpotifyClient(options.spotifyClient);
       const deviceHint = input.device ?? undefined;
@@ -194,6 +205,7 @@ function createSpotifyPauseTool(
     sideEffecting: true,
     approvalRequired: false,
     idempotent: false,
+    turnPolicy: blockAfterReminderSchedulePolicy,
     async execute(input) {
       const spotifyClient = requireSpotifyClient(options.spotifyClient);
       const pauseResult = await spotifyClient.pauseAndWaitForStop(
@@ -224,6 +236,7 @@ function createSpotifyResumeTool(
     sideEffecting: true,
     approvalRequired: false,
     idempotent: false,
+    turnPolicy: blockAfterReminderSchedulePolicy,
     async execute(input) {
       const spotifyClient = requireSpotifyClient(options.spotifyClient);
 
