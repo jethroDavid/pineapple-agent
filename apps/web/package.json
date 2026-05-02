@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node scripts/clean.mjs && tsc -p tsconfig.json && node scripts/build.mjs",
     "check": "tsc --noEmit -p tsconfig.json",
-    "dev": "pnpm build && node scripts/serve.mjs"
+    "dev": "node scripts/dev.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

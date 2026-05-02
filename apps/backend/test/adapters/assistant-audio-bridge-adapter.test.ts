@@ -156,7 +156,10 @@ describe("assistant audio bridge adapter", () => {
       "assistant_bridge_spotify_list_devices",
       "assistant_bridge_spotify_play",
       "assistant_bridge_spotify_pause",
-      "assistant_bridge_spotify_resume"
+      "assistant_bridge_spotify_resume",
+      "assistant_bridge_spotify_list_playlists",
+      "assistant_bridge_spotify_add_tracks_to_playlist",
+      "assistant_bridge_spotify_play_playlist"
     ]);
 
     const app = buildApp({

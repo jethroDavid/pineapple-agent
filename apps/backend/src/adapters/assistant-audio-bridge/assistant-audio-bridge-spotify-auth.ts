@@ -10,6 +10,10 @@ const spotifyAccountsBase = "https://accounts.spotify.com";
 const spotifyAuthTimeoutMs = 300_000;
 const spotifyRequestTimeoutMs = 12_000;
 const spotifyScopes = [
+  "playlist-read-private",
+  "playlist-read-collaborative",
+  "playlist-modify-public",
+  "playlist-modify-private",
   "user-read-playback-state",
   "user-modify-playback-state",
   "user-read-currently-playing"

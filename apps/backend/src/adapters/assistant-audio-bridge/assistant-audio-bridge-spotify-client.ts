@@ -21,11 +21,20 @@ export interface AssistantAudioBridgeSpotifyDevice {
   type: string | null;
 }
 
-interface AssistantAudioBridgeSpotifyTrack {
+export interface AssistantAudioBridgeSpotifyTrack {
   id: string;
   name: string;
   uri: string;
   artists: string[];
+}
+
+export interface AssistantAudioBridgeSpotifyPlaylist {
+  id: string;
+  name: string;
+  uri: string;
+  ownerName: string | null;
+  trackCount: number | null;
+  isPublic: boolean | null;
 }
 
 interface AssistantAudioBridgePlaybackState {
@@ -170,6 +179,108 @@ export class AssistantAudioBridgeSpotifyClient {
     return track;
   }
 
+  async listPlaylists(): Promise<AssistantAudioBridgeSpotifyPlaylist[]> {
+    const playlists: AssistantAudioBridgeSpotifyPlaylist[] = [];
+    let offset = 0;
+    const limit = 50;
+
+    while (true) {
+      const response = await this.request("GET", "/me/playlists", {
+        query: {
+          limit: String(limit),
+          offset: String(offset)
+        },
+        expectJson: true
+      });
+      const page = response as {
+        items?: unknown[];
+        total?: number;
+      } | null;
+      const items = page?.items ?? [];
+
+      playlists.push(...items.flatMap((item) => this.parsePlaylist(item)));
+
+      if (items.length < limit || playlists.length >= (page?.total ?? 0)) {
+        break;
+      }
+
+      offset += items.length;
+    }
+
+    return playlists.sort((left, right) => left.name.localeCompare(right.name));
+  }
+
+  async addTracksToPlaylist(input: {
+    playlist: string;
+    tracks: string[];
+    position?: number;
+  }): Promise<{
+    playlist: AssistantAudioBridgeSpotifyPlaylist;
+    tracks: AssistantAudioBridgeSpotifyTrack[];
+    snapshotId: string | null;
+  }> {
+    const playlist = await this.resolvePlaylist(input.playlist);
+    const tracks = await Promise.all(
+      input.tracks.map(async (track) => await this.resolveTrack(track))
+    );
+    const response = await this.request("POST", `/playlists/${playlist.id}/tracks`, {
+      query: {
+        position:
+          input.position === undefined ? undefined : String(input.position)
+      },
+      body: {
+        uris: tracks.map((track) => track.uri)
+      },
+      expectJson: true
+    });
+
+    return {
+      playlist,
+      tracks,
+      snapshotId:
+        typeof (response as { snapshot_id?: unknown } | null)?.snapshot_id ===
+        "string"
+          ? (response as { snapshot_id: string }).snapshot_id
+          : null
+    };
+  }
+
+  async playPlaylist(input: {
+    playlist: string;
+    track?: string;
+    deviceHint?: string;
+  }): Promise<{
+    playlist: AssistantAudioBridgeSpotifyPlaylist;
+    track: AssistantAudioBridgeSpotifyTrack | null;
+  }> {
+    const playlist = await this.resolvePlaylist(input.playlist);
+    const track = input.track
+      ? await this.findPlaylistTrack(playlist.id, input.track)
+      : null;
+
+    if (input.track && track === null) {
+      throw new Error(
+        `No matching track found in Spotify playlist "${playlist.name}" for: ${input.track}`
+      );
+    }
+
+    const deviceId = await this.resolveDeviceId(input.deviceHint);
+    await this.request("PUT", "/me/player/play", {
+      query: {
+        device_id: deviceId
+      },
+      body: {
+        context_uri: playlist.uri,
+        ...(track ? { offset: { uri: track.uri } } : {})
+      }
+    });
+
+    return {
+      playlist,
+      track
+    };
+  }
+
   async listDevices(): Promise<AssistantAudioBridgeSpotifyDevice[]> {
     const response = await this.request("GET", "/me/player/devices", {
       expectJson: true
@@ -240,6 +351,45 @@ export class AssistantAudioBridgeSpotifyClient {
         .map((artist) => artist.name)
         .filter((name): name is string => Boolean(name))
     };
+  }
+
+  async listPlaylistTracks(
+    playlistId: string
+  ): Promise<AssistantAudioBridgeSpotifyTrack[]> {
+    const tracks: AssistantAudioBridgeSpotifyTrack[] = [];
+    let offset = 0;
+    const limit = 50;
+
+    while (true) {
+      const response = await this.request(
+        "GET",
+        `/playlists/${playlistId}/tracks`,
+        {
+          query: {
+            limit: String(limit),
+            offset: String(offset),
+            fields:
+              "items(track(id,name,uri,type,artists(name))),total"
+          },
+          expectJson: true
+        }
+      );
+      const page = response as {
+        items?: unknown[];
+        total?: number;
+      } | null;
+      const items = page?.items ?? [];
+
+      tracks.push(...items.flatMap((item) => this.parsePlaylistTrack(item)));
+
+      if (items.length < limit || tracks.length >= (page?.total ?? 0)) {
+        break;
+      }
+
+      offset += items.length;
+    }
+
+    return tracks;
   }
 
   async getPlaybackState(
@@ -434,6 +584,176 @@ export class AssistantAudioBridgeSpotifyClient {
     }
 
     throw new Error(`No Spotify device matched: ${hint}`);
+  }
+
+  private async resolvePlaylist(
+    playlistHint: string
+  ): Promise<AssistantAudioBridgeSpotifyPlaylist> {
+    const normalizedHint = playlistHint.trim().toLowerCase();
+
+    if (!normalizedHint) {
+      throw new Error("Spotify playlist must not be empty.");
+    }
+
+    const playlists = await this.listPlaylists();
+    const exactId = playlists.find((playlist) => playlist.id === playlistHint);
+
+    if (exactId) {
+      return exactId;
+    }
+
+    const exactUri = playlists.find((playlist) => playlist.uri === playlistHint);
+
+    if (exactUri) {
+      return exactUri;
+    }
+
+    const exactName = playlists.find(
+      (playlist) => playlist.name.toLowerCase() === normalizedHint
+    );
+
+    if (exactName) {
+      return exactName;
+    }
+
+    const partialMatches = playlists.filter((playlist) =>
+      playlist.name.toLowerCase().includes(normalizedHint)
+    );
+
+    if (partialMatches.length === 1) {
+      return partialMatches[0]!;
+    }
+
+    if (partialMatches.length > 1) {
+      const names = partialMatches.map((playlist) => playlist.name).join(", ");
+      throw new Error(`Spotify playlist name is ambiguous. Matches: ${names}`);
+    }
+
+    throw new Error(`No Spotify playlist matched: ${playlistHint}`);
+  }
+
+  private async resolveTrack(
+    trackHint: string
+  ): Promise<AssistantAudioBridgeSpotifyTrack> {
+    if (trackHint.startsWith("spotify:track:")) {
+      return {
+        id: trackHint.slice("spotify:track:".length),
+        name: trackHint,
+        uri: trackHint,
+        artists: []
+      };
+    }
+
+    const track = await this.findFirstTrack(trackHint);
+
+    if (track === null) {
+      throw new Error(`No Spotify track found for query: ${trackHint}`);
+    }
+
+    return track;
+  }
+
+  private async findPlaylistTrack(
+    playlistId: string,
+    trackHint: string
+  ): Promise<AssistantAudioBridgeSpotifyTrack | null> {
+    if (trackHint.startsWith("spotify:track:")) {
+      return {
+        id: trackHint.slice("spotify:track:".length),
+        name: trackHint,
+        uri: trackHint,
+        artists: []
+      };
+    }
+
+    const normalizedHint = trackHint.trim().toLowerCase();
+    const tracks = await this.listPlaylistTracks(playlistId);
+
+    return (
+      tracks.find(
+        (track) =>
+          track.name.toLowerCase() === normalizedHint ||
+          `${track.name} ${track.artists.join(" ")}`
+            .toLowerCase()
+            .includes(normalizedHint)
+      ) ?? null
+    );
+  }
+
+  private parsePlaylist(value: unknown): AssistantAudioBridgeSpotifyPlaylist[] {
+    const candidate = value as {
+      id?: unknown;
+      name?: unknown;
+      uri?: unknown;
+      owner?: {
+        display_name?: unknown;
+        id?: unknown;
+      };
+      tracks?: {
+        total?: unknown;
+      };
+      public?: unknown;
+    };
+
+    if (
+      typeof candidate.id !== "string" ||
+      typeof candidate.name !== "string" ||
+      typeof candidate.uri !== "string"
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        id: candidate.id,
+        name: candidate.name,
+        uri: candidate.uri,
+        ownerName:
+          typeof candidate.owner?.display_name === "string"
+            ? candidate.owner.display_name
+            : typeof candidate.owner?.id === "string"
+              ? candidate.owner.id
+              : null,
+        trackCount:
+          typeof candidate.tracks?.total === "number"
+            ? candidate.tracks.total
+            : null,
+        isPublic:
+          typeof candidate.public === "boolean" ? candidate.public : null
+      }
+    ];
+  }
+
+  private parsePlaylistTrack(value: unknown): AssistantAudioBridgeSpotifyTrack[] {
+    const track = (value as {
+      track?: {
+        id?: unknown;
+        name?: unknown;
+        uri?: unknown;
+        type?: unknown;
+        artists?: Array<{ name?: unknown }>;
+      } | null;
+    }).track;
+
+    if (
+      track?.type !== "track" ||
+      typeof track.id !== "string" ||
+      typeof track.name !== "string" ||
+      typeof track.uri !== "string"
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        id: track.id,
+        name: track.name,
+        uri: track.uri,
+        artists: (track.artists ?? [])
+          .map((artist) => artist.name)
+          .filter((name): name is string => typeof name === "string" && name !== "")
+      }
+    ];
   }
 
   private buildUrl(path: string, query?: Record<string, string | undefined>): URL {

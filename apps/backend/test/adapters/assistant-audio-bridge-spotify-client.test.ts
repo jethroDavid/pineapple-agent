@@ -182,6 +182,228 @@ describe("AssistantAudioBridgeSpotifyClient reauthentication", () => {
   });
 });
 
+describe("AssistantAudioBridgeSpotifyClient playlists", () => {
+  const tempDirs: string[] = [];
+
+  afterEach(async () => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+    await Promise.all(
+      tempDirs.map(async (dir) => {
+        await rm(dir, {
+          recursive: true,
+          force: true
+        });
+      })
+    );
+    tempDirs.length = 0;
+  });
+
+  it("lists current user playlists", async () => {
+    const tokenFilePath = await createTokenFile(tempDirs, {
+      accessToken: "playlist-access",
+      refreshToken: "refresh",
+      tokenType: "Bearer",
+      expiresAt: Date.now() + 3600_000
+    });
+
+    globalThis.fetch = vi.fn(async (input, init) => {
+      const url = new URL(String(input));
+      expect(getAuthorizationHeader(init?.headers)).toBe("Bearer playlist-access");
+
+      if (url.pathname === "/v1/me/playlists") {
+        expect(url.searchParams.get("limit")).toBe("50");
+        return jsonResponse(
+          {
+            total: 1,
+            items: [
+              {
+                id: "playlist-1",
+                name: "Road Trip",
+                uri: "spotify:playlist:playlist-1",
+                owner: {
+                  display_name: "Owner"
+                },
+                tracks: {
+                  total: 12
+                },
+                public: false
+              }
+            ]
+          },
+          200
+        );
+      }
+
+      throw new Error(`Unexpected URL: ${url.toString()}`);
+    }) as typeof fetch;
+
+    const client = new AssistantAudioBridgeSpotifyClient({
+      clientId: "client-id",
+      tokenFilePath
+    });
+
+    await expect(client.listPlaylists()).resolves.toEqual([
+      {
+        id: "playlist-1",
+        name: "Road Trip",
+        uri: "spotify:playlist:playlist-1",
+        ownerName: "Owner",
+        trackCount: 12,
+        isPublic: false
+      }
+    ]);
+  });
+
+  it("adds searched tracks to a named playlist", async () => {
+    const tokenFilePath = await createTokenFile(tempDirs, {
+      accessToken: "playlist-access",
+      refreshToken: "refresh",
+      tokenType: "Bearer",
+      expiresAt: Date.now() + 3600_000
+    });
+
+    globalThis.fetch = vi.fn(async (input, init) => {
+      const url = new URL(String(input));
+
+      if (url.pathname === "/v1/me/playlists") {
+        return playlistsResponse();
+      }
+
+      if (url.pathname === "/v1/search") {
+        return jsonResponse(
+          {
+            tracks: {
+              items: [
+                {
+                  id: "track-1",
+                  name: "Song One",
+                  uri: "spotify:track:track-1",
+                  artists: [{ name: "Artist" }]
+                }
+              ]
+            }
+          },
+          200
+        );
+      }
+
+      if (url.pathname === "/v1/playlists/playlist-1/tracks") {
+        expect(url.searchParams.get("position")).toBe("2");
+        expect(getJsonBody(init?.body)).toEqual({
+          uris: ["spotify:track:track-1", "spotify:track:track-2"]
+        });
+        return jsonResponse(
+          {
+            snapshot_id: "snapshot-1"
+          },
+          201
+        );
+      }
+
+      throw new Error(`Unexpected URL: ${url.toString()}`);
+    }) as typeof fetch;
+
+    const client = new AssistantAudioBridgeSpotifyClient({
+      clientId: "client-id",
+      tokenFilePath
+    });
+
+    const result = await client.addTracksToPlaylist({
+      playlist: "Road Trip",
+      tracks: ["Song One", "spotify:track:track-2"],
+      position: 2
+    });
+
+    expect(result.snapshotId).toBe("snapshot-1");
+    expect(result.tracks.map((track) => track.uri)).toEqual([
+      "spotify:track:track-1",
+      "spotify:track:track-2"
+    ]);
+  });
+
+  it("starts playlist playback at a matching playlist track", async () => {
+    const tokenFilePath = await createTokenFile(tempDirs, {
+      accessToken: "playlist-access",
+      refreshToken: "refresh",
+      tokenType: "Bearer",
+      expiresAt: Date.now() + 3600_000
+    });
+
+    globalThis.fetch = vi.fn(async (input, init) => {
+      const url = new URL(String(input));
+
+      if (url.pathname === "/v1/me/playlists") {
+        return playlistsResponse();
+      }
+
+      if (url.pathname === "/v1/playlists/playlist-1/tracks") {
+        return jsonResponse(
+          {
+            total: 1,
+            items: [
+              {
+                track: {
+                  id: "track-1",
+                  name: "Song One",
+                  uri: "spotify:track:track-1",
+                  type: "track",
+                  artists: [{ name: "Artist" }]
+                }
+              }
+            ]
+          },
+          200
+        );
+      }
+
+      if (url.pathname === "/v1/me/player/devices") {
+        return jsonResponse(
+          {
+            devices: [
+              {
+                id: "device-1",
+                name: "Desk",
+                is_active: true,
+                type: "Computer"
+              }
+            ]
+          },
+          200
+        );
+      }
+
+      if (url.pathname === "/v1/me/player/play") {
+        expect(url.searchParams.get("device_id")).toBe("device-1");
+        expect(getJsonBody(init?.body)).toEqual({
+          context_uri: "spotify:playlist:playlist-1",
+          offset: {
+            uri: "spotify:track:track-1"
+          }
+        });
+        return new Response(null, {
+          status: 204
+        });
+      }
+
+      throw new Error(`Unexpected URL: ${url.toString()}`);
+    }) as typeof fetch;
+
+    const client = new AssistantAudioBridgeSpotifyClient({
+      clientId: "client-id",
+      tokenFilePath
+    });
+
+    const result = await client.playPlaylist({
+      playlist: "Road Trip",
+      track: "Song One",
+      deviceHint: "Desk"
+    });
+
+    expect(result.track?.uri).toBe("spotify:track:track-1");
+  });
+});
+
 function extractRefreshTokenFromBody(body: unknown): string | null {
   if (body === null || body === undefined) {
     return null;
@@ -223,6 +445,37 @@ function jsonResponse(body: unknown, status: number): Response {
       "content-type": "application/json"
     }
   });
+}
+
+function playlistsResponse(): Response {
+  return jsonResponse(
+    {
+      total: 1,
+      items: [
+        {
+          id: "playlist-1",
+          name: "Road Trip",
+          uri: "spotify:playlist:playlist-1",
+          owner: {
+            display_name: "Owner"
+          },
+          tracks: {
+            total: 12
+          },
+          public: false
+        }
+      ]
+    },
+    200
+  );
+}
+
+function getJsonBody(body: unknown): unknown {
+  if (typeof body !== "string") {
+    return null;
+  }
+
+  return JSON.parse(body);
 }
 
 async function createTokenFile(
