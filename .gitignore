@@ -10,3 +10,18 @@ apps/backend/.spotify-token.json
 .gradle-user/
 .tmp/
 .tmp-*.log
+
+# Firebase local output
+.firebase/
+firebase-debug.log
+**/firebase-debug.log
+
+# Large local demo media; keep source videos outside git
+apps/web/public/assets/demos/*.mp4
+
+# Local AI/tooling skill installs
+.agents/
+.claude/
+.continue/
+.kiro/
+skills-lock.json

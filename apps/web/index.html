@@ -19,6 +19,7 @@
         <span>Pineapple Agent</span>
       </a>
       <nav class="nav-links" aria-label="Primary navigation">
+        <a href="#demo">Demos</a>
         <a href="#how-it-works">How it works</a>
         <a href="#tech">Tech</a>
         <a href="#about">About</a>
@@ -127,27 +128,51 @@
 
       <section class="demo-section" id="demo" aria-labelledby="demo-title">
         <div class="section-heading" data-animate>
-          <p class="eyebrow">Run flow</p>
-          <h2 id="demo-title">Every run leaves a trail.</h2>
+          <p class="eyebrow">Live demos</p>
+          <h2 id="demo-title">The agent loop is visible from every surface.</h2>
           <p>
-            Pineapple keeps agent behavior visible: manifests define who can act,
-            toolsets define what they can touch, and persisted runs show how work moved.
+            These recordings show the same local runtime controlled through Telegram,
+            Shortcut, Codex, the mobile app, Spotify playback, and streaming audio.
           </p>
         </div>
 
-        <div class="terminal-wrap" data-animate>
-          <div class="terminal-top">
-            <span></span><span></span><span></span>
-            <p>pineapple-agent</p>
-          </div>
-          <div class="terminal-body" aria-live="polite">
-            <p><span>$</span> pnpm pineapple</p>
-            <p><em>preflight</em> Tailscale Funnel route checked</p>
-            <p><em>sync</em> mobile .env gets the public backend URL</p>
-            <p><em>webhook</em> Telegram and Shortcut base URLs injected</p>
-            <p><em>route</em> root_manager -&gt; codex for repository work</p>
-            <p><em>run</em> POST /agents/:agentId/runs for direct agent calls</p>
-            <p><strong>ready</strong> local backend, Telegram, and agent manifests loaded</p>
+        <div class="demo-reel" data-animate>
+          <figure class="demo-feature demo-feature-wide">
+            <video controls playsinline preload="metadata" aria-label="Agent, Telegram, Shortcut, and Codex integration demo">
+              <source src="/assets/demos/agent-control-loop.mp4" type="video/mp4" />
+            </video>
+            <figcaption>
+              <span>Agent control loop</span>
+              <p>Telegram directs the agent runtime while Shortcut and Codex carry planning, issue context, and repository work.</p>
+            </figcaption>
+          </figure>
+
+          <figure class="demo-feature demo-feature-phone">
+            <video controls playsinline preload="metadata" aria-label="Mobile app, Telegram, Spotify playback, and audio streaming demo">
+              <source src="/assets/demos/mobile-audio-loop.mp4" type="video/mp4" />
+            </video>
+            <figcaption>
+              <span>Mobile audio loop</span>
+              <p>The mobile app connects Telegram control to Spotify playback and live audio streaming.</p>
+            </figcaption>
+          </figure>
+        </div>
+
+        <div class="run-evidence" data-animate>
+          <div class="terminal-wrap">
+            <div class="terminal-top">
+              <span></span><span></span><span></span>
+              <p>pineapple-agent</p>
+            </div>
+            <div class="terminal-body" aria-live="polite">
+              <p><span>$</span> pnpm pineapple</p>
+              <p><em>preflight</em> Tailscale Funnel route checked</p>
+              <p><em>sync</em> mobile .env gets the public backend URL</p>
+              <p><em>webhook</em> Telegram and Shortcut base URLs injected</p>
+              <p><em>route</em> root_manager -&gt; codex for repository work</p>
+              <p><em>run</em> POST /agents/:agentId/runs for direct agent calls</p>
+              <p><strong>ready</strong> local backend, Telegram, and agent manifests loaded</p>
+            </div>
           </div>
         </div>
       </section>

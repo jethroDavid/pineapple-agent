@@ -45,6 +45,12 @@ img {
   max-width: 100%;
 }
 
+video {
+  display: block;
+  width: 100%;
+  background: #041f1a;
+}
+
 .site-header {
   position: fixed;
   top: 0;
@@ -463,6 +469,64 @@ h1 span {
   box-shadow: 0 30px 90px rgba(4, 31, 26, 0.28);
 }
 
+.demo-reel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(16rem, 0.65fr);
+  align-items: end;
+  gap: clamp(1.2rem, 3vw, 2.2rem);
+  max-width: 78rem;
+}
+
+.demo-feature {
+  margin: 0;
+}
+
+.demo-feature video {
+  overflow: hidden;
+  border: 1px solid rgba(6, 35, 29, 0.1);
+  border-radius: 0.8rem;
+  box-shadow: 0 26px 72px rgba(54, 88, 45, 0.16);
+}
+
+.demo-feature-wide video {
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+}
+
+.demo-feature-phone {
+  justify-self: center;
+  width: min(100%, 22rem);
+}
+
+.demo-feature-phone video {
+  aspect-ratio: 9 / 19.5;
+  object-fit: cover;
+}
+
+.demo-feature figcaption {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 1rem;
+  max-width: 34rem;
+}
+
+.demo-feature figcaption span {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.demo-feature figcaption p {
+  margin: 0;
+  color: var(--ink-muted);
+  line-height: 1.55;
+}
+
+.run-evidence {
+  margin-top: clamp(2rem, 5vw, 4.5rem);
+}
+
 .terminal-top {
   display: flex;
   align-items: center;
@@ -828,6 +892,15 @@ h1 span {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .demo-reel {
+    grid-template-columns: 1fr;
+  }
+
+  .demo-feature-phone {
+    justify-self: start;
+    width: min(22rem, 100%);
+  }
+
   .workflow-grid article:nth-child(2) {
     border-right: 0;
   }
@@ -1013,6 +1086,30 @@ h1 span {
   .terminal-wrap {
     border-radius: 0;
     margin-inline: -1rem;
+  }
+
+  .demo-reel {
+    margin-inline: -1rem;
+  }
+
+  .demo-feature figcaption {
+    padding-inline: 1rem;
+  }
+
+  .demo-feature video {
+    border-radius: 0;
+    border-right: 0;
+    border-left: 0;
+  }
+
+  .demo-feature-phone {
+    width: 100%;
+  }
+
+  .demo-feature-phone video {
+    aspect-ratio: 9 / 16;
+    max-height: 78svh;
+    object-fit: contain;
   }
 
   .terminal-body {
