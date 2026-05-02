@@ -8,6 +8,7 @@ import type {
   TelegramThreadSelectionStore
 } from "../../../../src/adapters/telegram/telegram-thread-selection-store.js";
 import type { TriggerEvent } from "../../../../src/execution/contracts/trigger-event.js";
+import type { ExecutionTurnResult } from "../../../../src/execution/execution-contracts.js";
 import type {
   AgentExecutionDecision
 } from "../../../../src/execution/domain/agent-execution-decision.js";
@@ -15,6 +16,7 @@ import type {
 export function createFakeExecutionService(options: {
   triggerError?: unknown;
   agentError?: unknown;
+  enqueueResult?: ExecutionTurnResult;
   decisionResult?: {
     decision: Partial<AgentExecutionDecision>;
     result: {
@@ -88,14 +90,12 @@ export function createFakeExecutionService(options: {
     enqueueTrigger(
       triggerEvent: TriggerEvent,
       _onError?: (error: unknown) => void,
-      onSuccess?: (result: unknown) => void
+      onSuccess?: (result: ExecutionTurnResult) => void
     ) {
       options.enqueuedTriggers?.push(triggerEvent);
-      onSuccess?.({
-        execution: {
-          status: "running"
-        }
-      });
+      if (options.enqueueResult !== undefined) {
+        onSuccess?.(options.enqueueResult);
+      }
     },
     async runTurn() {
       if (options.agentError) {
@@ -335,10 +335,12 @@ export function createFakeTelegramBotClient(): TelegramBotClientLike {
   };
 }
 
-export function createFakeShortcutClient(): ShortcutClient {
+export function createFakeShortcutClient(options: {
+  createdComments?: string[];
+} = {}): ShortcutClient {
   return new ShortcutClient({
     apiToken: "shortcut-token",
-    fetchImplementation: (async (input) => {
+    fetchImplementation: (async (input, init) => {
       const url = String(input);
 
       if (url.endsWith("/stories/123")) {
@@ -362,6 +364,24 @@ export function createFakeShortcutClient(): ShortcutClient {
                   }
                 }
               ]
+            };
+          }
+        } as Response;
+      }
+
+      if (url.endsWith("/stories/123/comments")) {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          text?: string;
+        };
+        options.createdComments?.push(body.text ?? "");
+
+        return {
+          ok: true,
+          async json() {
+            return {
+              id: 5002,
+              text: body.text ?? "",
+              author_id: "agent-member"
             };
           }
         } as Response;

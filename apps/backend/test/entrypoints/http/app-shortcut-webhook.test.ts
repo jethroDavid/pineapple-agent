@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { createShortcutAdapter } from "../../../src/adapters/shortcut/shortcut-adapter.js";
 import type { TriggerEvent } from "../../../src/execution/contracts/trigger-event.js";
+import type { ExecutionTurnResult } from "../../../src/execution/execution-contracts.js";
 import { buildApp } from "../../../src/entrypoints/http/server.js";
 import {
   createFakeExecutionService,
@@ -106,4 +107,125 @@ describe("app Shortcut webhook endpoint", () => {
       instructions: expect.stringContaining("shortcut_update_story")
     });
   });
+
+  it("posts final output back to Shortcut after successful trigger execution", async () => {
+    const createdComments: string[] = [];
+    const payload = JSON.stringify(validShortcutWebhookPayload());
+    const app = buildApp({
+      adapters: [
+        createShortcutAdapter({
+          apiToken: "shortcut-token",
+          webhookSecret: "shortcut-secret",
+          webhookBaseUrl: "https://pineapple.example.ts.net",
+          webhookIntegrationId: "500107362",
+          agentName: "pineapple",
+          client: createFakeShortcutClient({
+            createdComments
+          })
+        })!
+      ],
+      execution: createFakeExecutionService({
+        enqueueResult: createCompletedShortcutResult({
+          finalOutput: "Removed Run from the web app navigation.",
+          usedTools: []
+        })
+      })
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/adapters/shortcut/webhook",
+      headers: {
+        "content-type": "application/json",
+        "payload-signature": createShortcutSignature(payload, "shortcut-secret")
+      },
+      payload
+    });
+
+    expect(response.statusCode).toBe(200);
+    await waitForCondition(() => createdComments.length === 1);
+    expect(createdComments).toEqual([
+      "[agent:pineapple] Removed Run from the web app navigation."
+    ]);
+  });
+
+  it("does not duplicate Shortcut completion comments when the agent already posted one", async () => {
+    const createdComments: string[] = [];
+    const payload = JSON.stringify(validShortcutWebhookPayload());
+    const app = buildApp({
+      adapters: [
+        createShortcutAdapter({
+          apiToken: "shortcut-token",
+          webhookSecret: "shortcut-secret",
+          webhookBaseUrl: "https://pineapple.example.ts.net",
+          webhookIntegrationId: "500107362",
+          agentName: "pineapple",
+          client: createFakeShortcutClient({
+            createdComments
+          })
+        })!
+      ],
+      execution: createFakeExecutionService({
+        enqueueResult: createCompletedShortcutResult({
+          finalOutput: "Done.",
+          usedTools: [
+            {
+              name: "shortcut_post_comment",
+              callId: "call-1"
+            }
+          ]
+        })
+      })
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/adapters/shortcut/webhook",
+      headers: {
+        "content-type": "application/json",
+        "payload-signature": createShortcutSignature(payload, "shortcut-secret")
+      },
+      payload
+    });
+
+    expect(response.statusCode).toBe(200);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(createdComments).toEqual([]);
+  });
 });
+
+function createCompletedShortcutResult(input: {
+  finalOutput: string;
+  usedTools: ExecutionTurnResult["usedTools"];
+}): ExecutionTurnResult {
+  return {
+    thread: {
+      threadId: "thread-1"
+    },
+    execution: {
+      executionId: "execution-1",
+      status: "completed"
+    },
+    route: null,
+    finalOutput: input.finalOutput,
+    lastResponseId: "resp-1",
+    activeAgentId: "codex",
+    activeAgentName: "Codex",
+    usedTools: input.usedTools,
+    pendingDecision: null
+  } as ExecutionTurnResult;
+}
+
+async function waitForCondition(condition: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (condition()) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  throw new Error("Timed out waiting for condition.");
+}

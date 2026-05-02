@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from "fastify";
 
 import type { AppAdapter, AppAdapterInitContext } from "../app-adapter.js";
+import type { ExecutionTurnResult } from "../../execution/execution-contracts.js";
 import type { AppExecutionService } from "../../execution/pipeline/service.js";
 import {
   ShortcutApiError,
@@ -8,7 +9,10 @@ import {
   type ShortcutWebhookIntegration
 } from "./shortcut-client.js";
 import { createShortcutCreateStoryTool } from "./shortcut-create-story-tool.js";
-import { createShortcutPostCommentTool } from "./shortcut-post-comment-tool.js";
+import {
+  createShortcutPostCommentTool,
+  getShortcutAgentCommentPrefix
+} from "./shortcut-post-comment-tool.js";
 import { createShortcutUpdateStoryTool } from "./shortcut-update-story-tool.js";
 import {
   createShortcutTriggerEvent,
@@ -269,22 +273,34 @@ async function processShortcutWebhookDelivery(
       triggerId: triggerEvent.trigger_id
     });
 
-    options.execution.enqueueTrigger(triggerEvent, (error) => {
-      traceError("shortcut", "trigger failed", error, {
-        deliveryId: delivery.deliveryId,
-        storyPublicId: delivery.storyPublicId,
-        triggerId: triggerEvent.trigger_id
-      });
-      options.logger.error(
-        {
-          ...(error instanceof Error ? { err: error } : { error }),
+    options.execution.enqueueTrigger(
+      triggerEvent,
+      (error) => {
+        traceError("shortcut", "trigger failed", error, {
           deliveryId: delivery.deliveryId,
           storyPublicId: delivery.storyPublicId,
           triggerId: triggerEvent.trigger_id
-        },
-        "Shortcut webhook trigger failed."
-      );
-    });
+        });
+        options.logger.error(
+          {
+            ...(error instanceof Error ? { err: error } : { error }),
+            deliveryId: delivery.deliveryId,
+            storyPublicId: delivery.storyPublicId,
+            triggerId: triggerEvent.trigger_id
+          },
+          "Shortcut webhook trigger failed."
+        );
+      },
+      (result) => {
+        void postShortcutCompletionComment({
+          agentName: options.agentName,
+          client: options.client,
+          logger: options.logger,
+          result,
+          storyPublicId: delivery.storyPublicId
+        });
+      }
+    );
   } catch (error) {
     traceError("shortcut", "webhook background processing failed", error);
     options.logger.error(
@@ -292,6 +308,49 @@ async function processShortcutWebhookDelivery(
         ...(error instanceof Error ? { err: error } : { error })
       },
       "Shortcut webhook background processing failed."
+    );
+  }
+}
+
+async function postShortcutCompletionComment(options: {
+  agentName: string;
+  client: ShortcutClientLike;
+  logger: FastifyBaseLogger;
+  result: ExecutionTurnResult;
+  storyPublicId: string;
+}): Promise<void> {
+  const finalOutput = options.result.finalOutput?.trim() ?? "";
+
+  if (
+    finalOutput.length === 0 ||
+    options.result.pendingDecision !== null ||
+    options.result.usedTools.some((tool) => tool.name === "shortcut_post_comment")
+  ) {
+    return;
+  }
+
+  try {
+    const comment = await options.client.createStoryComment(options.storyPublicId, {
+      text: `${getShortcutAgentCommentPrefix(options.agentName)} ${finalOutput}`
+    });
+
+    trace("shortcut", "completion comment posted", {
+      storyPublicId: options.storyPublicId,
+      commentId: comment.id,
+      executionId: options.result.execution.executionId
+    });
+  } catch (error) {
+    traceError("shortcut", "completion comment failed", error, {
+      storyPublicId: options.storyPublicId,
+      executionId: options.result.execution.executionId
+    });
+    options.logger.error(
+      {
+        ...(error instanceof Error ? { err: error } : { error }),
+        storyPublicId: options.storyPublicId,
+        executionId: options.result.execution.executionId
+      },
+      "Shortcut completion comment failed."
     );
   }
 }

@@ -112,5 +112,21 @@ describe("loadAgentManifests", () => {
     expect(rootManager?.instructions).toContain(
       "If a Shortcut story is too ambiguous to act on"
     );
+    expect(rootManager?.instructions).toContain(
+      "return a concise final output that can be posted back to the story"
+    );
+  });
+
+  it("keeps the bundled Codex prompt explicit about Shortcut completion updates", async () => {
+    const manifests = await loadAgentManifests(resolve(".pineapple/agents"));
+    const codex = manifests.find((manifest) => manifest.id === "codex");
+
+    expect(codex?.instructions).toContain(
+      "always finish with a concise public completion update"
+    );
+    expect(codex?.instructions).toContain("shortcut_post_comment");
+    expect(codex?.instructions).toContain(
+      "Pineapple may mirror that final output back to the Shortcut story"
+    );
   });
 });
