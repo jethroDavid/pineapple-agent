@@ -589,27 +589,29 @@ export class AssistantAudioBridgeSpotifyClient {
   private async resolvePlaylist(
     playlistHint: string
   ): Promise<AssistantAudioBridgeSpotifyPlaylist> {
-    const normalizedHint = playlistHint.trim().toLowerCase();
+    const trimmedHint = playlistHint.trim();
+    const normalizedHint = normalizePlaylistName(trimmedHint);
 
     if (!normalizedHint) {
       throw new Error("Spotify playlist must not be empty.");
     }
 
     const playlists = await this.listPlaylists();
-    const exactId = playlists.find((playlist) => playlist.id === playlistHint);
+    const exactId = playlists.find((playlist) => playlist.id === trimmedHint);
 
     if (exactId) {
       return exactId;
     }
 
-    const exactUri = playlists.find((playlist) => playlist.uri === playlistHint);
+    const exactUri = playlists.find((playlist) => playlist.uri === trimmedHint);
 
     if (exactUri) {
       return exactUri;
     }
 
+    const nameHints = buildPlaylistNameHints(trimmedHint);
     const exactName = playlists.find(
-      (playlist) => playlist.name.toLowerCase() === normalizedHint
+      (playlist) => nameHints.includes(normalizePlaylistName(playlist.name))
     );
 
     if (exactName) {
@@ -617,7 +619,7 @@ export class AssistantAudioBridgeSpotifyClient {
     }
 
     const partialMatches = playlists.filter((playlist) =>
-      playlist.name.toLowerCase().includes(normalizedHint)
+      nameHints.some((hint) => normalizePlaylistName(playlist.name).includes(hint))
     );
 
     if (partialMatches.length === 1) {
@@ -891,4 +893,40 @@ function isSpotifyRestrictionViolationError(error: unknown): boolean {
   }
 
   return /restriction violated/i.test(error.message);
+}
+
+function buildPlaylistNameHints(playlistHint: string): string[] {
+  const hints = new Set<string>();
+
+  const addHint = (value: string): void => {
+    const normalized = normalizePlaylistName(value);
+
+    if (normalized.length > 0) {
+      hints.add(normalized);
+    }
+  };
+
+  addHint(playlistHint);
+
+  let current = playlistHint.trim();
+  while (current.length > 0) {
+    const next = current
+      .replace(/^(?:my|the|a)\s+/i, "")
+      .replace(/\s+on\s+spotify$/i, "")
+      .replace(/\s+(?:spotify\s+)?playlists?$/i, "")
+      .trim();
+
+    if (next === current) {
+      break;
+    }
+
+    addHint(next);
+    current = next;
+  }
+
+  return Array.from(hints);
+}
+
+function normalizePlaylistName(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
 }

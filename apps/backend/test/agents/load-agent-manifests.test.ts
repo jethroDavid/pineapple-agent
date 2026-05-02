@@ -129,4 +129,24 @@ describe("loadAgentManifests", () => {
       "Pineapple may mirror that final output back to the Shortcut story"
     );
   });
+
+  it("keeps the bundled audio bridge prompt explicit about Spotify playlist tools", async () => {
+    const manifests = await loadAgentManifests(resolve(".pineapple/agents"));
+    const audioBridge = manifests.find(
+      (manifest) => manifest.id === "assistant_audio_bridge"
+    );
+
+    expect(audioBridge?.instructions).toContain(
+      "For playlist playback requests such as \"play my vibe playlist\""
+    );
+    expect(audioBridge?.instructions).toContain(
+      "assistant_bridge_spotify_play_playlist"
+    );
+    expect(audioBridge?.instructions).toContain(
+      "assistant_bridge_spotify_add_tracks_to_playlist"
+    );
+    expect(audioBridge?.instructions).toContain(
+      "assistant_bridge_spotify_list_playlists"
+    );
+  });
 });

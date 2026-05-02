@@ -395,7 +395,7 @@ describe("AssistantAudioBridgeSpotifyClient playlists", () => {
     });
 
     const result = await client.playPlaylist({
-      playlist: "Road Trip",
+      playlist: "my Road Trip playlist",
       track: "Song One",
       deviceHint: "Desk"
     });

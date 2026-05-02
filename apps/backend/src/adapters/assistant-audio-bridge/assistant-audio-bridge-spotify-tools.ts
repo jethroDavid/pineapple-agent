@@ -220,7 +220,7 @@ function createSpotifyPlayTool(
   return {
     name: assistantAudioBridgeSpotifyToolNames.play,
     description:
-      "Resume Spotify playback, or search and play a track when query is provided.",
+      "Resume Spotify playback, or search and play a track when query is provided. Do not use this for playlist requests; use assistant_bridge_spotify_play_playlist instead.",
     inputSchema: spotifyPlayInputSchema,
     outputSchema: spotifyPlayOutputSchema,
     sideEffecting: true,
@@ -353,7 +353,7 @@ function createSpotifyAddTracksToPlaylistTool(
   return {
     name: assistantAudioBridgeSpotifyToolNames.addTracksToPlaylist,
     description:
-      "Add one or more Spotify tracks to a playlist. The playlist can be a playlist id, URI, or unambiguous playlist name; each track can be a Spotify track URI or search query.",
+      "Add one or more Spotify tracks to a playlist. The playlist can be a playlist id, URI, or unambiguous playlist name; each track can be a Spotify track URI or search query. For spoken requests like \"add this to my vibe playlist\", pass the playlist name without filler words when clear.",
     inputSchema: spotifyAddTracksToPlaylistInputSchema,
     outputSchema: spotifyAddTracksToPlaylistOutputSchema,
     sideEffecting: true,
@@ -384,7 +384,7 @@ function createSpotifyPlayPlaylistTool(
   return {
     name: assistantAudioBridgeSpotifyToolNames.playPlaylist,
     description:
-      "Start Spotify playback from a playlist, optionally offset to a matching track in that playlist. Requires Spotify Premium for playback control.",
+      "Start Spotify playback from a Spotify playlist, optionally offset to a matching track in that playlist. Use this for requests like \"play my vibe playlist\" or \"play the road trip playlist\". The playlist can be a playlist id, URI, or unambiguous playlist name.",
     inputSchema: spotifyPlayPlaylistInputSchema,
     outputSchema: spotifyPlayPlaylistOutputSchema,
     sideEffecting: true,
