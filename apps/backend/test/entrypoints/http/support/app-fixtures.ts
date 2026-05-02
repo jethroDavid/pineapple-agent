@@ -29,6 +29,7 @@ export function createFakeExecutionService(options: {
       };
       route: null;
       finalOutput: string | null;
+      replyText: string | null;
       lastResponseId: string | null;
       activeAgentId: string;
       activeAgentName: string;
@@ -80,6 +81,7 @@ export function createFakeExecutionService(options: {
           entrypointAgentId: "root_manager"
         },
         finalOutput: "hello",
+        replyText: "hello",
         lastResponseId: "resp-1",
         activeAgentId: "root_manager",
         activeAgentName: "Root Manager",
@@ -113,6 +115,7 @@ export function createFakeExecutionService(options: {
         },
         route: null,
         finalOutput: "done",
+        replyText: "done",
         lastResponseId: "resp-agent-1",
         activeAgentId: "codex",
         activeAgentName: "Codex",

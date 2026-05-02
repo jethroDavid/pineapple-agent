@@ -467,7 +467,8 @@ function createExecutionHarness(): {
             execution: {
               executionId: `execution-${input.requestId}`
             },
-            finalOutput: input.finalOutput
+            finalOutput: input.finalOutput,
+            replyText: input.finalOutput
           } as ExecutionTurnResult
         );
       } catch (error) {

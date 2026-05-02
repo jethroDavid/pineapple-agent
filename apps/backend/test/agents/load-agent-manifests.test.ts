@@ -115,6 +115,9 @@ describe("loadAgentManifests", () => {
     expect(rootManager?.instructions).toContain(
       "return a concise final output that can be posted back to the story"
     );
+    expect(rootManager?.instructions).toContain(
+      "For Telegram messages, always delegate exactly once"
+    );
   });
 
   it("keeps the bundled Codex prompt explicit about Shortcut completion updates", async () => {

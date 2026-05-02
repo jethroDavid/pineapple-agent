@@ -144,6 +144,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       active_agent_id: result.activeAgentId,
       active_agent_name: result.activeAgentName,
       final_output: result.finalOutput,
+      reply_text: result.replyText,
       last_response_id: result.lastResponseId,
       pending_decision: toPendingDecisionResponse(result.pendingDecision)
     };
@@ -220,6 +221,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       active_agent_id: result.activeAgentId,
       active_agent_name: result.activeAgentName,
       final_output: result.finalOutput,
+      reply_text: result.replyText,
       last_response_id: result.lastResponseId,
       pending_decision: toPendingDecisionResponse(result.pendingDecision)
     };
@@ -242,7 +244,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       execution_status: result.execution.status,
       active_agent_id: result.activeAgentId,
       active_agent_name: result.activeAgentName,
-      output_text: result.finalOutput,
+      output_text: result.replyText,
       pending_decision: toPendingDecisionResponse(result.pendingDecision)
     };
   });
@@ -268,7 +270,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       thread_id: result.thread.threadId,
       active_agent_id: result.activeAgentId,
       active_agent_name: result.activeAgentName,
-      output_text: result.finalOutput,
+      output_text: result.replyText,
       pending_decision: toPendingDecisionResponse(result.pendingDecision)
     };
   });

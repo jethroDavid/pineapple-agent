@@ -41,6 +41,7 @@ describe("app agent runtime endpoint", () => {
       active_agent_id: "codex",
       active_agent_name: "Codex",
       final_output: "done",
+      reply_text: "done",
       last_response_id: "resp-agent-1",
       pending_decision: null
     });
@@ -93,7 +94,8 @@ describe("app agent runtime endpoint", () => {
     expect(response.json()).toMatchObject({
       thread_id: "thread-1",
       active_agent_id: "codex",
-      final_output: "done"
+      final_output: "done",
+      reply_text: "done"
     });
   });
 

@@ -11,6 +11,7 @@ import {
 import type { TelegramBotClientLike } from "../../src/adapters/telegram/telegram-bot-client.js";
 import { telegramWebhookSecretHeader } from "../../src/adapters/telegram/telegram-webhook.js";
 import type { TriggerEvent } from "../../src/execution/contracts/trigger-event.js";
+import type { ExecutionTurnResult } from "../../src/execution/execution-contracts.js";
 import { createThread, type NewThread, type Thread } from "../../src/threads/domain/thread.js";
 import type { ThreadStore } from "../../src/threads/store/thread-store.js";
 import { PineappleDaemon } from "../../src/execution/queue/pineapple-daemon.js";
@@ -25,6 +26,84 @@ describe("createTelegramAdapter", () => {
       await app?.close();
     }
   });
+
+  async function injectTelegramMessageWithRunResult(
+    runResult: Partial<ExecutionTurnResult>,
+    updateId = 1005
+  ) {
+    const threadStore = new InMemoryThreadStore();
+    const threadSelectionStore = new InMemoryTelegramThreadSelectionStore();
+    const client = createFakeTelegramBotClient({
+      webhookInfo: {
+        url: "",
+        pending_update_count: 0
+      }
+    });
+    const adapter = createTelegramAdapter({
+      botToken: "bot-token",
+      inboundMode: "webhook",
+      webhookSecret: "telegram-secret",
+      webhookBaseUrl: "https://pineapple.example.ts.net",
+      threadStore,
+      threadSelectionStore,
+      client
+    });
+    const daemon = new PineappleDaemon(async () => ({
+      route: { kind: "unbound_create", thread: { threadId: "thread-1" } },
+      thread: { threadId: "thread-1" },
+      execution: {
+        executionId: "execution-1",
+        status: "completed",
+        entrypointAgentId: "root_manager"
+      },
+      finalOutput: "",
+      replyText: "",
+      lastResponseId: "resp-1",
+      activeAgentId: "root_manager",
+      activeAgentName: "Root Manager",
+      usedTools: [],
+      pendingDecision: null,
+      ...runResult
+    }) as never);
+    daemon.start();
+
+    const app = Fastify();
+    apps.push(app);
+    adapter!.registerRoutes(app, {
+      execution: createFakeExecutionService(daemon)
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: telegramWebhookPath,
+      headers: {
+        [telegramWebhookSecretHeader]: "telegram-secret"
+      },
+      payload: {
+        update_id: updateId,
+        message: {
+          message_id: updateId,
+          date: 1_775_526_640,
+          text: "Hello again",
+          from: {
+            id: 42,
+            is_bot: false
+          },
+          chat: {
+            id: 5001,
+            type: "private"
+          }
+        }
+      }
+    });
+
+    await daemon.whenIdle();
+
+    return {
+      client,
+      response
+    };
+  }
 
   it("returns null when Telegram is not configured", () => {
     expect(createTelegramAdapter({})).toBeNull();
@@ -273,6 +352,10 @@ describe("createTelegramAdapter", () => {
     expect(threadStore.list()).toHaveLength(1);
     const currentThreadId = await threadSelectionStore.getCurrent("5001");
     expect(currentThreadId).toBe(threadStore.list()[0]?.threadId);
+    expect(threadStore.list()[0]?.threadMetadata.deliveryContext.telegram).toEqual({
+      chatId: "5001",
+      chatType: "private"
+    });
   });
 
   it("lists recent threads and marks the current one", async () => {
@@ -406,6 +489,13 @@ describe("createTelegramAdapter", () => {
     });
     const currentThreadId = await threadSelectionStore.getCurrent("5001");
     expect(currentThreadId).toBe(firstThread.threadId);
+    expect(
+      (await threadStore.get(firstThread.threadId))?.threadMetadata.deliveryContext
+        .telegram
+    ).toEqual({
+      chatId: "5001",
+      chatType: "private"
+    });
   });
 
   it("lists agents and selects a direct Telegram agent", async () => {
@@ -709,76 +799,40 @@ describe("createTelegramAdapter", () => {
     });
   });
 
-  it("falls back to sending the final output text when the model does not call telegram_send_message", async () => {
-    const threadStore = new InMemoryThreadStore();
-    const threadSelectionStore = new InMemoryTelegramThreadSelectionStore();
-    const client = createFakeTelegramBotClient({
-      webhookInfo: {
-        url: "",
-        pending_update_count: 0
-      }
-    });
-    const adapter = createTelegramAdapter({
-      botToken: "bot-token",
-      inboundMode: "webhook",
-      webhookSecret: "telegram-secret",
-      webhookBaseUrl: "https://pineapple.example.ts.net",
-      threadStore,
-      threadSelectionStore,
-      client
-    });
-    const daemon = new PineappleDaemon(async () => ({
-      route: { kind: "unbound_create", thread: { threadId: "thread-1" } },
-      thread: { threadId: "thread-1" },
-      execution: {
-        executionId: "execution-1",
-        status: "completed",
-        entrypointAgentId: "root_manager"
-      },
+  it("falls back to sending reply text when the model does not call telegram_send_message", async () => {
+    const { client, response } = await injectTelegramMessageWithRunResult({
       finalOutput: "Plain text reply",
-      lastResponseId: "resp-1",
-      activeAgentId: "root_manager",
-      activeAgentName: "Root Manager",
-      usedTools: [],
-      pendingDecision: null
-    }) as never);
-    daemon.start();
-
-    const app = Fastify();
-    apps.push(app);
-    adapter!.registerRoutes(app, {
-      execution: createFakeExecutionService(daemon)
+      replyText: "Plain text reply"
     });
 
-    const response = await app.inject({
-      method: "POST",
-      url: telegramWebhookPath,
-      headers: {
-        [telegramWebhookSecretHeader]: "telegram-secret"
-      },
-      payload: {
-        update_id: 1005,
-        message: {
-          message_id: 59,
-          date: 1_775_526_640,
-          text: "Hello again",
-          from: {
-            id: 42,
-            is_bot: false
-          },
-          chat: {
-            id: 5001,
-            type: "private"
-          }
-        }
-      }
-    });
-
-    await daemon.whenIdle();
     await vi.waitFor(() => {
       expect(client.sendMessage).toHaveBeenCalledWith({
         chat_id: "5001",
         text: "Plain text reply",
+        message_thread_id: undefined
+      });
+    });
+    expect(response.statusCode).toBe(200);
+  });
+
+  it("falls back to sending delegated output when the root final output is empty", async () => {
+    const { client, response } = await injectTelegramMessageWithRunResult(
+      {
+        replyText: "Delegated plain text reply",
+        usedTools: [
+          {
+            name: "ask_general_assistant",
+            callId: "call-1"
+          }
+        ]
+      },
+      1010
+    );
+
+    await vi.waitFor(() => {
+      expect(client.sendMessage).toHaveBeenCalledWith({
+        chat_id: "5001",
+        text: "Delegated plain text reply",
         message_thread_id: undefined
       });
     });

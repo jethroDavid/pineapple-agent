@@ -39,6 +39,7 @@ export async function handleRecoveryRequest(
       execution,
       route: null,
       finalOutput: null,
+      replyText: null,
       lastResponseId: thread.lastResponseId,
       activeAgentId: execution.activeAgentId,
       activeAgentName: execution.activeAgentId,

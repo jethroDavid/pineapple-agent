@@ -158,7 +158,7 @@ async function sendTelegramRunReplyFallback(
     return;
   }
 
-  const text = (runResult.finalOutput ?? "").trim();
+  const text = runResult.replyText?.trim();
 
   if (!text) {
     return;
@@ -251,6 +251,7 @@ async function handleTelegramCommand(
         ...(requestedTitle ? { title: requestedTitle } : {})
       });
       await options.threadSelectionStore.setCurrent(contextKey, thread.threadId);
+      await persistTelegramThreadContext(thread.threadId, update, options);
 
       return {
         text: [
@@ -315,6 +316,7 @@ async function handleTelegramCommand(
       }
 
       await options.threadSelectionStore.setCurrent(contextKey, selectedThread.threadId);
+      await persistTelegramThreadContext(selectedThread.threadId, update, options);
 
       return {
         text: `Current Pineapple thread set to ${selectedThread.threadId}`

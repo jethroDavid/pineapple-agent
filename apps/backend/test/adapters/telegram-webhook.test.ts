@@ -144,7 +144,7 @@ describe("normalizeTelegramWebhookUpdate", () => {
         "Screenshot from production"
       ].join("\n"),
       instructions:
-        "This input came from Telegram. Reply like a natural chat message, not a formatted document. Use plain text only: no Markdown, headings, bullet lists, tables, bold or italic markers, or code fences unless the user explicitly asks for that format. Keep it concise and conversational, using short paragraphs only when they help readability. When you send a Telegram reply, call telegram_send_message with chat_id=5001."
+        "This input came from Telegram. Reply like a natural chat message, not a formatted document. Use plain text only: no Markdown, headings, bullet lists, tables, bold or italic markers, or code fences unless the user explicitly asks for that format. Keep it concise and conversational, using short paragraphs only when they help readability. Return the reply text so Pineapple can deliver it to Telegram chat_id=5001."
     });
   });
 

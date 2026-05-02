@@ -116,11 +116,64 @@ describe("app execution modules", () => {
     });
 
     expect(result.execution.kind).toBe(agentExecutionKind.trigger);
+    expect(result.replyText).toBe("done");
     expect(context.executeTurn).toHaveBeenCalledWith(
       expect.objectContaining({
         agentId: "codex"
       })
     );
+
+    await context.daemon.stop();
+  });
+
+  it("uses delegated specialist output as reply text when the root final output is empty", async () => {
+    const context = createExecutionContext({
+      executeTurn: async () =>
+        createRuntimeResult({
+          finalOutput: "",
+          newItems: [
+            {
+              type: "tool_call_output_item",
+              rawItem: {
+                type: "function_call_result",
+                name: "ask_general_assistant"
+              },
+              output: {
+                type: "text",
+                text: "Got it - test received."
+              }
+            }
+          ] as never
+        })
+    });
+
+    const result = await submitExecutionRequest({
+      request: {
+        kind: "trigger",
+        triggerEvent: createTriggerEvent({
+          trigger_id: "telegram:update:1",
+          source: {
+            kind: triggerSourceKind.webhook,
+            system: "telegram",
+            event_type: "message"
+          },
+          actor: {
+            type: triggerActorType.human,
+            id: "8219784564"
+          },
+          routing: {
+            allow_unbound_thread: true
+          },
+          payload: {
+            input: "test"
+          }
+        })
+      },
+      options: context.serviceOptions
+    });
+
+    expect(result.finalOutput).toBe("");
+    expect(result.replyText).toBe("Got it - test received.");
 
     await context.daemon.stop();
   });

@@ -210,6 +210,7 @@ function createCompletedShortcutResult(input: {
     },
     route: null,
     finalOutput: input.finalOutput,
+    replyText: input.finalOutput,
     lastResponseId: "resp-1",
     activeAgentId: "codex",
     activeAgentName: "Codex",

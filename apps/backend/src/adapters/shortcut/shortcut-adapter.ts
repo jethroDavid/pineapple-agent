@@ -319,10 +319,10 @@ async function postShortcutCompletionComment(options: {
   result: ExecutionTurnResult;
   storyPublicId: string;
 }): Promise<void> {
-  const finalOutput = options.result.finalOutput?.trim() ?? "";
+  const replyText = options.result.replyText?.trim() ?? "";
 
   if (
-    finalOutput.length === 0 ||
+    replyText.length === 0 ||
     options.result.pendingDecision !== null ||
     options.result.usedTools.some((tool) => tool.name === "shortcut_post_comment")
   ) {
@@ -331,7 +331,7 @@ async function postShortcutCompletionComment(options: {
 
   try {
     const comment = await options.client.createStoryComment(options.storyPublicId, {
-      text: `${getShortcutAgentCommentPrefix(options.agentName)} ${finalOutput}`
+      text: `${getShortcutAgentCommentPrefix(options.agentName)} ${replyText}`
     });
 
     trace("shortcut", "completion comment posted", {

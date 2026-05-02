@@ -43,6 +43,7 @@ export interface ExecutionTurnResult {
   execution: AgentExecution;
   route: TriggerRouteResult | null;
   finalOutput: string | null;
+  replyText: string | null;
   lastResponseId: string | null;
   activeAgentId: string;
   activeAgentName: string;

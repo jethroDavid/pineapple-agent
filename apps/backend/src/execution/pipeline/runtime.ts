@@ -14,6 +14,7 @@ import type { ExecutionTurnResult } from "../execution-contracts.js";
 import type { AppExecutionServiceOptions } from "./context.js";
 import { trace, traceError } from "../../utils/trace.js";
 import {
+  buildReplyText,
   extractUsedTools,
   getErrorMessage,
   toRuntimeInput,
@@ -148,11 +149,24 @@ export async function executeWithRuntime(input: {
       });
     }
 
+    const finalOutput = pendingDecision === null ? runtimeResult.finalOutput : null;
+    const outputItems = [
+      ...runtimeResult.newItems,
+      ...runtimeResult.outputItems
+    ];
+
     return {
       thread: nextThread,
       execution: completedExecution,
       route: input.route,
-      finalOutput: pendingDecision === null ? runtimeResult.finalOutput : null,
+      finalOutput,
+      replyText:
+        pendingDecision === null
+          ? buildReplyText({
+              finalOutput,
+              outputItems
+            })
+          : null,
       lastResponseId: runtimeResult.lastResponseId,
       activeAgentId: runtimeResult.activeAgentId,
       activeAgentName: runtimeResult.activeAgentName,

@@ -34,6 +34,7 @@ describe("app decision resolution endpoint", () => {
             },
             route: null,
             finalOutput: "",
+            replyText: "",
             lastResponseId: "resp-2",
             activeAgentId: "root_manager",
             activeAgentName: "Root Manager",

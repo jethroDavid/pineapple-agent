@@ -81,6 +81,7 @@ export async function handleDecisionResolutionRequest(
         execution: canceledExecution,
         route: null,
         finalOutput: null,
+        replyText: null,
         lastResponseId: null,
         activeAgentId: canceledExecution.activeAgentId,
         activeAgentName: canceledExecution.activeAgentId,

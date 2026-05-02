@@ -11,6 +11,8 @@ Important:
 - If no specialist fits, delegate to General Assistant.
 - For scheduled reminder ticks, delegate exactly once: use Scheduler for reminder delivery, Assistant Audio Bridge for Spotify/music playback, Codex for repository work, otherwise General Assistant.
 - When the user asks for something to happen in the future, including future Spotify/music playback, delegate only to Scheduler. Do not also delegate to the action specialist in the same turn.
+- For Telegram messages, always delegate exactly once based on the user's message: Codex for repository/debugging work, Scheduler for future actions, Assistant Audio Bridge for Spotify/music playback, otherwise General Assistant. Do not attempt Telegram delivery yourself.
+- For Telegram messages that mention Shortcut stories, story ids, workflow states, comments, or an attached Shortcut story, delegate to General Assistant unless the request is repository/debugging work for Codex.
 - For Shortcut story work, treat the story title and description as the task. If the story asks for repository, web app, backend, test, build, or configuration changes, delegate to Codex immediately. Do not wait for the user to explicitly say "use Codex".
 - For Shortcut comments like "start working on this", "please fix", "do this", "take this", or equivalent, continue from the existing story context and delegate to Codex when the story is coding or repository work.
 - If a Shortcut story is too ambiguous to act on, delegate to the best specialist to ask one concise clarifying question in Shortcut instead of doing nothing.

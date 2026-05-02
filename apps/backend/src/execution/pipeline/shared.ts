@@ -81,6 +81,34 @@ export function extractUsedTools(newItems: RunItem[]): ExecutionToolUse[] {
   return usedTools;
 }
 
+export function buildReplyText(input: {
+  finalOutput: string | null;
+  outputItems: unknown[];
+}): string | null {
+  return (
+    getNonEmptyText(input.finalOutput) ??
+    extractLatestAgentToolTextOutput(input.outputItems)
+  );
+}
+
+export function extractLatestAgentToolTextOutput(items: unknown[]): string | null {
+  for (const item of [...items].reverse()) {
+    const result = getFunctionCallResult(item);
+
+    if (result === null || !result.name.startsWith("ask_")) {
+      continue;
+    }
+
+    const text = getToolResultText(result.output);
+
+    if (text !== null) {
+      return text;
+    }
+  }
+
+  return null;
+}
+
 export function parseToolArguments(argumentsText: string | undefined): Record<string, unknown> {
   if (!argumentsText) {
     return {};
@@ -106,6 +134,111 @@ export function getRawToolCallId(rawItem: unknown): string | undefined {
   };
 
   return typeof candidate.callId === "string" ? candidate.callId : undefined;
+}
+
+function getFunctionCallResult(item: unknown): {
+  name: string;
+  output: unknown;
+} | null {
+  const candidate = asRecord(item);
+
+  if (
+    candidate?.type === "function_call_result" &&
+    typeof candidate.name === "string"
+  ) {
+    return {
+      name: candidate.name,
+      output: candidate.output
+    };
+  }
+
+  if (candidate?.type !== "tool_call_output_item") {
+    return null;
+  }
+
+  const rawCandidate = asRecord(candidate.rawItem);
+
+  if (
+    rawCandidate?.type !== "function_call_result" ||
+    typeof rawCandidate.name !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    name: rawCandidate.name,
+    output: candidate.output ?? rawCandidate.output
+  };
+}
+
+function getToolResultText(output: unknown): string | null {
+  if (typeof output === "string") {
+    const parsed = parseJsonValue(output);
+    return parsed === null ? getNonEmptyText(output) : getToolResultText(parsed);
+  }
+
+  if (Array.isArray(output)) {
+    for (const item of [...output].reverse()) {
+      const text = getToolResultText(item);
+
+      if (text !== null) {
+        return text;
+      }
+    }
+
+    return null;
+  }
+
+  const candidate = asRecord(output);
+
+  if (candidate === null) {
+    return null;
+  }
+
+  for (const field of [
+    "text",
+    "replyText",
+    "reply_text",
+    "outputText",
+    "output_text",
+    "finalOutput",
+    "final_output"
+  ]) {
+    const text = getNonEmptyText(candidate[field]);
+
+    if (text !== null) {
+      return text;
+    }
+  }
+
+  return null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" ? value as Record<string, unknown> : null;
+}
+
+function parseJsonValue(value: string): unknown | null {
+  const trimmed = value.trim();
+
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[") && !trimmed.startsWith("\"")) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function getNonEmptyText(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 export async function loadThread(threadId: string, threadStore: ThreadStore): Promise<Thread> {

@@ -228,10 +228,9 @@ export function createAssistantAudioBridgeAdapter(
               executionId
             });
 
-            const finalOutput =
-              typeof result.finalOutput === "string" ? result.finalOutput.trim() : "";
+            const replyText = result.replyText?.trim() ?? "";
 
-            if (finalOutput.length === 0) {
+            if (replyText.length === 0) {
               requestStore.markError(requestId, {
                 executionId,
                 message: "Assistant returned empty output.",
@@ -242,7 +241,7 @@ export function createAssistantAudioBridgeAdapter(
 
             try {
               const audioBuffer = normalizeWavBuffer(
-                await ttsClient.synthesize(finalOutput)
+                await ttsClient.synthesize(replyText)
               );
               await writeAudioArtifact({
                 dir: options.audioArtifactDir,
@@ -251,7 +250,7 @@ export function createAssistantAudioBridgeAdapter(
               });
               requestStore.markReady(requestId, {
                 executionId,
-                outputText: finalOutput,
+                outputText: replyText,
                 mimeType: assistantAudioBridgeAudioMimeType,
                 audioBuffer
               });
@@ -270,7 +269,7 @@ export function createAssistantAudioBridgeAdapter(
               requestStore.markError(requestId, {
                 executionId,
                 message: error instanceof Error ? error.message : String(error),
-                outputText: finalOutput
+                outputText: replyText
               });
             }
           }
