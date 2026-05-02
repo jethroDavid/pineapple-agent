@@ -172,6 +172,8 @@ function createShortcutInstructions(storyPublicId: string): string {
     "This input came from Shortcut.",
     "Each Shortcut story maps to one Pineapple thread.",
     "Use concise public comments suitable for humans collaborating in Shortcut.",
+    "Treat the Shortcut story title and description as the work request. If it is actionable, start work or ask one concise clarifying question without waiting for the user to explicitly name a specialist.",
+    "For repository, web app, backend, tests, build, or configuration changes, delegate to Codex immediately. Comments like \"start working on this\" mean continue from the story context and begin the implementation.",
     `When you need to reply in Shortcut, call shortcut_post_comment with story_public_id=${storyPublicId}.`,
     `When you need to update the story, call shortcut_update_story with story_public_id=${storyPublicId}.`
   ].join(" ");

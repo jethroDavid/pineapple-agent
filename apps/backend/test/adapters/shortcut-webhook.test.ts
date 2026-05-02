@@ -163,6 +163,9 @@ describe("Shortcut webhook helpers", () => {
       input: expect.stringContaining("Status: In Progress"),
       instructions: expect.stringContaining("shortcut_update_story")
     });
+    const payload = triggerEvent.payload as { instructions: string };
+    expect(payload.instructions).toContain("delegate to Codex immediately");
+    expect(payload.instructions).toContain("start working on this");
   });
 
   it("identifies self-authored agent comments so the adapter can avoid echo loops", () => {

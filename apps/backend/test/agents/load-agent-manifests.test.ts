@@ -106,5 +106,11 @@ describe("loadAgentManifests", () => {
       agentTools: ["general_assistant", "scheduler", "codex", "assistant_audio_bridge"],
       entrypoint: true
     });
+    expect(rootManager?.instructions).toContain(
+      "Do not wait for the user to explicitly say \"use Codex\""
+    );
+    expect(rootManager?.instructions).toContain(
+      "If a Shortcut story is too ambiguous to act on"
+    );
   });
 });
