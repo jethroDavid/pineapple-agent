@@ -156,6 +156,12 @@ importers:
         specifier: ~5.9.2
         version: 5.9.3
 
+  apps/web:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   packages/shared-contracts:
     dependencies:
       zod:

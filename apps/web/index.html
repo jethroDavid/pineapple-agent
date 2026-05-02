@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Pineapple Agent is a local TypeScript agent runtime with explicit routing, resumable runs, and Telegram control."
+    />
+    <title>Pineapple Agent</title>
+    <link rel="icon" href="/assets/pineapple-agent-icon.png" />
+    <link rel="stylesheet" href="/assets/styles.css" />
+    <script type="module" src="/assets/main.js"></script>
+  </head>
+  <body>
+    <header class="site-header" data-animate>
+      <a class="brand" href="#top" aria-label="Pineapple Agent home">
+        <img src="/assets/pineapple-agent-icon.png" alt="" />
+        <span>Pineapple Agent</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary navigation">
+        <a href="#how-it-works">How it works</a>
+        <a href="#tech">Tech</a>
+        <a href="#about">About</a>
+        <a href="#demo">Run</a>
+      </nav>
+      <a class="header-cta" href="#demo">
+        Run
+        <svg class="icon-arrow" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 12h14M13 6l6 6-6 6" />
+        </svg>
+      </a>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy" data-animate>
+          <p class="eyebrow">Local agent runtime</p>
+          <h1 id="hero-title">Pineapple <span>Agent<b class="caret" aria-hidden="true"></b></span></h1>
+          <p class="hero-lede">
+            A small TypeScript system for routing work between specialist agents,
+            preserving run state, and controlling the loop from Telegram.
+          </p>
+          <a class="command-button" href="#demo" aria-label="View the Pineapple Agent run flow">
+            <span>$</span>
+            <code>pnpm <strong>pineapple</strong></code>
+            <!-- <i aria-hidden="true"></i> -->
+          </a>
+
+          <div class="proof-strip" aria-label="Project highlights">
+            <div>
+              <span class="mini-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M8 4H6a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h2" />
+                  <path d="M16 4h2a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-2" />
+                </svg>
+              </span>
+              <p>Built with<br />TypeScript</p>
+            </div>
+            <div>
+              <span class="mini-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" />
+                  <circle cx="12" cy="12" r="3.5" />
+                </svg>
+              </span>
+              <p>OpenAI<br />Responses API</p>
+            </div>
+            <div>
+              <span class="mini-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M22 2 11 13" />
+                  <path d="M22 2 15 22l-4-9-9-4 20-7z" />
+                </svg>
+              </span>
+              <p>Telegram<br />control plane</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-stage" aria-hidden="true">
+          <img class="hero-fruit" src="/assets/pineapple-hero.png" alt="" />
+          <div class="step-card step-plan" data-depth="slow">
+            <span class="step-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m3 17 2 2 4-4" />
+                <path d="m3 7 2 2 4-4" />
+                <path d="M13 6h8M13 12h8M13 18h8" />
+              </svg>
+            </span>
+            <b><span>1</span> Plan</b>
+            <p>Record the task, context, and next decision.</p>
+          </div>
+          <div class="step-card step-edit" data-depth="fast">
+            <span class="step-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m16 18 6-6-6-6M8 6l-6 6 6 6M14 4l-4 16" />
+              </svg>
+            </span>
+            <b><span>2</span> Edit</b>
+            <p>Give the coding specialist repository tools.</p>
+          </div>
+          <div class="step-card step-test" data-depth="slow">
+            <span class="step-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <path d="m9 11 3 3L22 4" />
+              </svg>
+            </span>
+            <b><span>3</span> Test</b>
+            <p>Run checks while keeping progress recoverable.</p>
+          </div>
+          <div class="step-card step-ship" data-depth="fast">
+            <span class="step-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+              </svg>
+            </span>
+            <b><span>4</span> Resume</b>
+            <p>Continue through Telegram, HTTP, cron, or mobile audio.</p>
+          </div>
+          <div class="status-card">
+            <span class="status-dot" aria-hidden="true"></span>
+            <p>Runtime ready. Telegram connected.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="demo-section" id="demo" aria-labelledby="demo-title">
+        <div class="section-heading" data-animate>
+          <p class="eyebrow">Run flow</p>
+          <h2 id="demo-title">Every run leaves a trail.</h2>
+          <p>
+            Pineapple keeps agent behavior visible: manifests define who can act,
+            toolsets define what they can touch, and persisted runs show how work moved.
+          </p>
+        </div>
+
+        <div class="terminal-wrap" data-animate>
+          <div class="terminal-top">
+            <span></span><span></span><span></span>
+            <p>pineapple-agent</p>
+          </div>
+          <div class="terminal-body" aria-live="polite">
+            <p><span>$</span> pnpm pineapple</p>
+            <p><em>preflight</em> Tailscale Funnel route checked</p>
+            <p><em>sync</em> mobile .env gets the public backend URL</p>
+            <p><em>webhook</em> Telegram and Shortcut base URLs injected</p>
+            <p><em>route</em> root_manager -&gt; codex for repository work</p>
+            <p><em>run</em> POST /agents/:agentId/runs for direct agent calls</p>
+            <p><strong>ready</strong> local backend, Telegram, and agent manifests loaded</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="workflow" id="how-it-works" aria-labelledby="workflow-title">
+        <div class="section-heading" data-animate>
+          <p class="eyebrow">How it works</p>
+          <h2 id="workflow-title">The runtime stays deliberately narrow.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article data-animate>
+            <span>01</span>
+            <h3>Agents are files</h3>
+            <p>Each specialist is declared in JSON with its prompt, tools, handoffs, and hosted OpenAI tools.</p>
+          </article>
+          <article data-animate>
+            <span>02</span>
+            <h3>Runs are durable</h3>
+            <p>Threads, decisions, and checkpoints are stored so interrupted work can resume without guessing.</p>
+          </article>
+          <article data-animate>
+            <span>03</span>
+            <h3>Codex handles code</h3>
+            <p>Repository inspection, shell commands, edits, and validation stay inside a dedicated coding specialist.</p>
+          </article>
+          <article data-animate>
+            <span>04</span>
+            <h3>Adapters are scoped</h3>
+            <p>Telegram, Shortcut, cron scheduling, and mobile audio are exposed only where the manifest allows them.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="tech-section" id="tech" aria-labelledby="tech-title">
+        <div class="section-heading" data-animate>
+          <p class="eyebrow">Tech</p>
+          <h2 id="tech-title">A plain stack for long-running agent work.</h2>
+        </div>
+        <div class="tech-list" data-animate>
+          <span>Node.js 22</span>
+          <span>TypeScript</span>
+          <span>Fastify</span>
+          <span>OpenAI SDK</span>
+          <span>Responses API</span>
+          <span>PostgreSQL</span>
+          <span>Drizzle ORM</span>
+          <span>Vitest</span>
+          <span>Expo mobile POC</span>
+          <span>Telegram bot</span>
+          <span>Tailscale Funnel</span>
+        </div>
+      </section>
+
+      <section class="about-section" id="about" aria-labelledby="about-title">
+        <div class="about-copy" data-animate>
+          <p class="eyebrow">About</p>
+          <h2 id="about-title">The project is about control surfaces, not a black box.</h2>
+          <p>
+            The repo keeps the moving parts readable: one Node service, one database,
+            manifest agents, direct HTTP runs, and local integrations around the loop.
+          </p>
+        </div>
+        <div class="agent-card" data-animate>
+          <img src="/assets/pineapple-agent-icon.png" alt="" />
+          <div>
+            <p>Agent status</p>
+            <strong><span class="status-dot" aria-hidden="true"></span>ready</strong>
+          </div>
+          <dl>
+            <div><dt>Entry</dt><dd>root_manager</dd></div>
+            <div><dt>Coding</dt><dd>codex_mcp</dd></div>
+            <div><dt>Chat</dt><dd>Telegram</dd></div>
+            <div><dt>Runtime</dt><dd>Fastify + OpenAI</dd></div>
+          </dl>
+        </div>
+      </section>
+
+      <!-- <section class="docs-section" id="docs" aria-labelledby="docs-title">
+        <div class="section-heading" data-animate>
+          <p class="eyebrow">Docs</p>
+          <h2 id="docs-title">Run the agent. Deploy only the website.</h2>
+          <p>
+            Pineapple itself runs from the backend. Firebase Hosting is only for this static showcase.
+          </p>
+        </div>
+        <div class="deploy-command" data-animate>
+          <code>pnpm pineapple</code>
+          <code>curl -X POST http://localhost:3000/agents/codex/runs</code>
+          <code>pnpm --filter @pineapple/web build</code>
+          <code>firebase deploy --only hosting</code>
+        </div>
+      </section> -->
+    </main>
+  </body>
+</html>
