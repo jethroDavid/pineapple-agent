@@ -34,6 +34,7 @@ pnpm mobile:ios
 pnpm check
 pnpm build
 pnpm test
+cd apps/backend EVAL_OPENAI_ENABLED=true pnpm exec vitest run test/evals/cron-trigger-routing.eval.test.ts
 pnpm test:watch
 pnpm db:up
 pnpm db:down
